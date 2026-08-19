@@ -1,488 +1,223 @@
 # B1. Đọc và phân tích yêu cầu
 
-## 1. Business Context
+## 1.1. Business Context
 
-Công ty ABC là doanh nghiệp cung cấp dịch vụ đặt xe trực tuyến. Hiện tại khách hàng có thể liên hệ với tổng đài hoặc sử dụng một ứng dụng đơn giản để yêu cầu xe.
+ABC là doanh nghiệp cung cấp dịch vụ đặt xe trực tuyến. Hiện tại khách hàng sử dụng tổng đài hoặc ứng dụng đơn giản để yêu cầu xe.
 
-Ban lãnh đạo ABC mong muốn xây dựng một nền tảng CAB mới có khả năng phục vụ số lượng lớn khách hàng và tài xế, đồng thời có khả năng phát triển thêm các tính năng trong tương lai.
+ABC muốn xây dựng CAB System dưới dạng backend service/API để hỗ trợ quy trình đặt xe và tạo nền tảng có khả năng mở rộng khi số lượng khách hàng, tài xế và nhu cầu dịch vụ tăng.
 
-Hệ thống mới không chỉ phục vụ chức năng đặt xe mà phải hỗ trợ xuyên suốt quy trình nghiệp vụ từ khi khách hàng tạo yêu cầu, tìm và phân công tài xế, thực hiện chuyến đi, tính cước, thanh toán, thông báo đến đánh giá sau chuyến. Các bộ phận trong doanh nghiệp cũng cần có khả năng phối hợp thông qua hệ thống và có đủ dữ liệu để theo dõi hoạt động.
+## 1.2. Business Problem
 
----
-
-## 2. Ngữ cảnh nghiệp vụ (Business Context)
-
-### 2.1. Quy trình nghiệp vụ tổng quát
-
-Quy trình nghiệp vụ chính của CAB System được xác định ở mức tổng quát như sau:
-
-```text
-Khách hàng tạo yêu cầu đặt xe
-        ↓
-Hệ thống tiếp nhận yêu cầu
-        ↓
-Xác định tài xế phù hợp
-        ↓
-Đề xuất chuyến cho tài xế
-        ↓
-Tài xế chấp nhận / từ chối / không phản hồi
-        ↓
-Nếu không nhận → tiếp tục tìm tài xế khác
-        ↓
-Tài xế đến điểm đón
-        ↓
-Đón khách
-        ↓
-Đang di chuyển
-        ↓
-Hoàn thành chuyến
-        ↓
-Tính cước
-        ↓
-Thanh toán
-        ↓
-Khách hàng đánh giá tài xế
-```
-
-Trong quá trình này, hệ thống phải hỗ trợ:
-
-- Theo dõi trạng thái của yêu cầu và chuyến đi.
-- Lưu thông tin vị trí tài xế để hỗ trợ tìm tài xế gần khách hàng và cải thiện khả năng dự kiến thời gian đến.
-- Gửi thông báo cho khách hàng và tài xế tại các mốc quan trọng.
-- Xử lý trường hợp tài xế từ chối hoặc không phản hồi.
-- Xử lý thanh toán tiền mặt và thanh toán điện tử.
-- Quản lý lịch sử chuyến đi và giao dịch.
-- Hỗ trợ nhân viên vận hành quản lý và xử lý các trường hợp bất thường.
-- Cung cấp báo cáo phục vụ theo dõi hoạt động kinh doanh.
-
----
-
-## 3. Business Problem
-
-### BP01. Phân công tài xế còn phụ thuộc vào thao tác thủ công
-
-Việc phân công tài xế hiện tại chủ yếu được thực hiện thủ công.
-
-Điều này gây khó khăn khi số lượng khách hàng và tài xế tăng lên, đồng thời làm tăng áp lực cho bộ phận vận hành.
-
-**Tác động nghiệp vụ:**
-
-- Khó đáp ứng số lượng yêu cầu lớn.
-- Khó duy trì hiệu quả vận hành khi quy mô tăng.
-- Việc tìm tài xế chưa được tự động hóa đầy đủ.
-
----
-
-### BP02. Khách hàng khó theo dõi trạng thái chuyến đi
-
-Khách hàng hiện khó theo dõi đầy đủ trạng thái của yêu cầu và chuyến đi.
-
-Khách hàng cần biết:
-
-- Hệ thống đang tìm tài xế hay chưa.
-- Tài xế nào đã nhận chuyến.
-- Thời gian dự kiến tài xế đến.
-- Trạng thái hiện tại của chuyến đi.
-
-**Tác động nghiệp vụ:**
-
-- Khách hàng thiếu thông tin trong quá trình sử dụng dịch vụ.
-- Giảm khả năng chủ động theo dõi chuyến đi.
-- Ảnh hưởng đến trải nghiệm khách hàng.
-
----
-
-### BP03. Thông tin thanh toán chưa được quản lý tập trung
-
-Thông tin thanh toán hiện tại chưa được quản lý tập trung.
-
-Trong khi đó, hệ thống mới phải hỗ trợ:
-
-- Thanh toán bằng tiền mặt.
-- Thanh toán điện tử.
-- Tích hợp với nhà cung cấp thanh toán bên ngoài.
-- Không lưu trực tiếp thông tin nhạy cảm của thẻ hoặc tài khoản thanh toán trong hệ thống CAB.
-
-**Tác động nghiệp vụ:**
-
-- Khó quản lý giao dịch theo một quy trình thống nhất.
-- Khó kiểm soát kết quả thanh toán.
-- Cần cơ chế xử lý khi thanh toán điện tử thất bại.
-
----
-
-### BP04. Hệ thống hiện tại khó mở rộng
-
-Doanh nghiệp muốn hệ thống mới có thể phục vụ số lượng lớn khách hàng và tài xế, đồng thời có thể phát triển thêm các tính năng trong tương lai.
-
-Các nhu cầu mở rộng được đề cập gồm:
-
-- Thêm loại dịch vụ mới.
-- Thêm phương thức thanh toán.
-- Thêm nhà cung cấp thông báo.
-- Thay đổi một số thành phần kỹ thuật mà không phải xây dựng lại toàn bộ ứng dụng.
-
-**Tác động nghiệp vụ:**
-
-- Hệ thống hiện tại không đáp ứng tốt mục tiêu phát triển dài hạn.
-- Việc mở rộng quy mô và chức năng gặp khó khăn.
-- Tăng rủi ro ảnh hưởng đến các chức năng đang hoạt động khi có thay đổi.
-
----
-
-### BP05. Khả năng mở rộng và vận hành độc lập của các thành phần chưa đáp ứng
-
-Doanh nghiệp yêu cầu hệ thống phải hoạt động ổn định trong các thời điểm nhu cầu tăng cao.
-
-Đồng thời:
-
-- Một lỗi ở thanh toán hoặc thông báo không được làm cho toàn bộ hệ thống đặt xe ngừng hoạt động.
-- Các thành phần cần có khả năng mở rộng độc lập khi tải tăng.
-- Các chức năng mới cần có khả năng triển khai từng phần với mức ảnh hưởng hạn chế đến các chức năng đang hoạt động.
-
-**Tác động nghiệp vụ:**
-
-- Giảm nguy cơ gián đoạn toàn bộ dịch vụ.
-- Tăng khả năng duy trì hoạt động khi tải tăng.
-- Hỗ trợ phát triển hệ thống theo từng giai đoạn.
-
----
-
-### BP06. Khả năng hỗ trợ vận hành và quản lý chưa đáp ứng nhu cầu
-
-Doanh nghiệp cần một giao diện quản trị để nhân viên vận hành có thể:
-
-- Quản lý khách hàng.
-- Quản lý tài xế.
-- Quản lý phương tiện.
-- Quản lý chuyến đi.
-- Theo dõi các chuyến đang diễn ra.
-- Kiểm tra trạng thái tài xế.
-- Hỗ trợ xử lý các trường hợp chuyến bị lỗi.
-- Tra cứu lịch sử giao dịch.
-
-Một số chức năng quản trị cần được phân quyền để nhân viên thông thường không thể thực hiện các thao tác nhạy cảm.
-
-**Tác động nghiệp vụ:**
-
-- Cần tăng khả năng kiểm soát và hỗ trợ vận hành.
-- Cần bảo đảm các thao tác nhạy cảm được kiểm soát theo quyền.
-- Cần có dữ liệu để phục vụ kiểm tra và xử lý sự cố.
-
----
-
-## 4. Vì sao hệ thống hiện tại không đáp ứng mục tiêu kinh doanh?
-
-| Hạn chế hiện tại | Mục tiêu kinh doanh bị ảnh hưởng |
+| ID | Vấn đề |
 |---|---|
-| Phân công tài xế chủ yếu thủ công | Khó phục vụ số lượng yêu cầu lớn và khó mở rộng vận hành |
-| Khách hàng khó theo dõi chuyến | Khả năng phục vụ và trải nghiệm khách hàng chưa đáp ứng tốt |
-| Thanh toán chưa được quản lý tập trung | Khó quản lý và kiểm soát giao dịch thống nhất |
-| Khó mở rộng hệ thống | Hạn chế khả năng tăng trưởng và phát triển sản phẩm |
-| Nhu cầu thông báo ngày càng đa dạng | Khó mở rộng các kênh giao tiếp với khách hàng và tài xế |
-| Xử lý lỗi có nguy cơ ảnh hưởng hoạt động chung | Tăng rủi ro gián đoạn dịch vụ |
-| Hỗ trợ vận hành và phân quyền cần được tăng cường | Khó quản lý và xử lý sự cố hiệu quả |
+| BP01 | Phân công tài xế chủ yếu thủ công, khó đáp ứng khi số lượng yêu cầu tăng. |
+| BP02 | Khách hàng khó theo dõi tài xế và trạng thái chuyến đi. |
+| BP03 | Thông tin và kết quả thanh toán chưa được quản lý tập trung. |
+| BP04 | Hệ thống hiện tại khó mở rộng và bổ sung chức năng mới. |
+| BP05 | Lỗi ở thanh toán/thông báo có nguy cơ ảnh hưởng hoạt động chung; hệ thống cần ổn định khi tải tăng. |
+| BP06 | Khả năng quản lý, theo dõi và xử lý sự cố của bộ phận vận hành còn hạn chế. |
 
----
+## 1.3. Mục tiêu kinh doanh
 
-## 5. Mục tiêu kinh doanh (Business Goals)
+- Tự động hóa quy trình tìm và phân công tài xế.
+- Cải thiện khả năng theo dõi chuyến đi.
+- Hỗ trợ tính cước và thanh toán.
+- Nâng cao hiệu quả vận hành.
+- Cung cấp dữ liệu và báo cáo.
+- Bảo vệ dữ liệu và kiểm soát thao tác nhạy cảm.
+- Đảm bảo hệ thống ổn định khi nhu cầu tăng.
+- Tạo nền tảng để mở rộng dịch vụ và chức năng trong tương lai.
 
-Hệ thống CAB mới hướng tới các mục tiêu sau:
+## 1.4. Business Value
 
-1. Phục vụ được số lượng lớn khách hàng và tài xế.
-2. Cải thiện và tự động hóa quy trình tìm và phân công tài xế.
-3. Cải thiện khả năng theo dõi chuyến đi của khách hàng.
-4. Hỗ trợ tính cước và thanh toán theo quy trình thống nhất.
-5. Hỗ trợ nhân viên vận hành quản lý khách hàng, tài xế, phương tiện và chuyến đi.
-6. Hỗ trợ xử lý các trường hợp bất thường và sự cố trong quá trình vận hành.
-7. Cung cấp dữ liệu và báo cáo về hoạt động kinh doanh.
-8. Bảo đảm hệ thống hoạt động ổn định trong thời điểm nhu cầu tăng cao.
-9. Bảo vệ thông tin cá nhân, thông tin phương tiện, dữ liệu vị trí và dữ liệu giao dịch.
-10. Xây dựng nền tảng đủ linh hoạt để bổ sung dịch vụ, phương thức thanh toán, nhà cung cấp thông báo và các thành phần kỹ thuật mới trong tương lai.
-
----
-
-## 6. Giá trị nghiệp vụ của hệ thống mới (Business Value)
-
-### 6.1. Tự động hóa quy trình tìm và phân công tài xế
-
-Hệ thống mới hỗ trợ xác định tài xế phù hợp dựa trên vị trí, trạng thái sẵn sàng và các tiêu chí vận hành khác.
-
-Khi tài xế được đề xuất không phản hồi hoặc từ chối, hệ thống có thể tiếp tục tìm tài xế khác mà không yêu cầu khách hàng tạo lại yêu cầu.
-
-**Giá trị:**
-
-- Giảm sự phụ thuộc vào thao tác thủ công.
-- Hỗ trợ xử lý yêu cầu hiệu quả hơn.
-- Tăng khả năng mở rộng khi số lượng yêu cầu tăng.
-
----
-
-### 6.2. Cải thiện trải nghiệm khách hàng
-
-Khách hàng có thể:
-
-- Theo dõi trạng thái yêu cầu.
-- Biết tài xế nào đã nhận chuyến.
-- Biết thời gian dự kiến tài xế đến.
-- Theo dõi trạng thái chuyến.
-- Xem lịch sử chuyến đi.
-- Xem số tiền phải trả.
-- Đánh giá tài xế sau chuyến.
-
-**Giá trị:**
-
-- Tăng khả năng quan sát của khách hàng.
-- Giảm sự không rõ ràng trong quá trình chờ và thực hiện chuyến.
-- Cải thiện trải nghiệm sử dụng dịch vụ.
-
----
-
-### 6.3. Nâng cao hiệu quả vận hành
-
-Nhân viên vận hành có thể quản lý khách hàng, tài xế, phương tiện và chuyến đi trên một giao diện quản trị.
-
-Hệ thống cũng hỗ trợ:
-
-- Theo dõi các chuyến đang diễn ra.
-- Kiểm tra trạng thái tài xế.
-- Hỗ trợ xử lý các trường hợp chuyến bị lỗi.
-- Tra cứu lịch sử giao dịch.
-
-**Giá trị:**
-
-- Tăng khả năng kiểm soát hoạt động.
-- Hỗ trợ xử lý sự cố.
-- Tạo dữ liệu tập trung phục vụ vận hành.
-
----
-
-### 6.4. Nâng cao khả năng quản lý thanh toán
-
-Hệ thống mới hỗ trợ cả thanh toán tiền mặt và thanh toán điện tử.
-
-Đối với thanh toán điện tử, hệ thống tích hợp với nhà cung cấp thanh toán bên ngoài và không lưu trực tiếp dữ liệu nhạy cảm của thẻ hoặc tài khoản thanh toán.
-
-Khi giao dịch thất bại, hệ thống phải thông báo cho khách hàng và cho phép xử lý lại theo chính sách của doanh nghiệp.
-
-**Giá trị:**
-
-- Hỗ trợ nhiều phương thức thanh toán.
-- Tăng khả năng kiểm soát kết quả giao dịch.
-- Giảm rủi ro khi quản lý dữ liệu thanh toán nhạy cảm.
-
----
-
-### 6.5. Cải thiện khả năng thông báo
-
-Khách hàng cần nhận được thông báo khi:
-
-- Yêu cầu đặt xe được tiếp nhận.
-- Tài xế nhận chuyến.
-- Tài xế đến điểm đón.
-- Chuyến hoàn thành.
-- Thanh toán có kết quả.
-
-Tài xế cũng cần nhận thông báo về chuyến mới hoặc thay đổi liên quan đến chuyến đang thực hiện.
-
-**Giá trị:**
-
-- Cải thiện khả năng giao tiếp giữa hệ thống và người dùng.
-- Tăng tính minh bạch của quy trình nghiệp vụ.
-- Tạo nền tảng để mở rộng thêm các kênh thông báo trong tương lai.
-
----
-
-### 6.6. Hỗ trợ báo cáo và ra quyết định
-
-Ban lãnh đạo cần có báo cáo về:
-
-- Số lượng chuyến.
-- Doanh thu.
-- Tỷ lệ chuyến hoàn thành.
-- Tỷ lệ hủy.
-- Hiệu quả hoạt động của tài xế.
-
-**Giá trị:**
-
-- Giúp doanh nghiệp theo dõi hiệu quả hoạt động.
-- Hỗ trợ đánh giá tình hình kinh doanh.
-- Hỗ trợ ra quyết định dựa trên dữ liệu.
-
----
-
-### 6.7. Tăng khả năng mở rộng và phát triển dài hạn
-
-Hệ thống mới phải có khả năng:
-
-- Mở rộng các thành phần độc lập khi tải tăng.
-- Triển khai chức năng mới từng phần.
-- Hạn chế ảnh hưởng đến các chức năng đang hoạt động.
-- Bổ sung loại dịch vụ mới.
-- Bổ sung phương thức thanh toán mới.
-- Bổ sung nhà cung cấp thông báo mới.
-- Thay đổi một số thành phần kỹ thuật mà không phải xây dựng lại toàn bộ ứng dụng.
-
-**Giá trị:**
-
-- Phù hợp với mục tiêu phát triển lâu dài.
-- Giảm phụ thuộc vào việc xây dựng lại toàn bộ hệ thống khi có thay đổi.
-- Hỗ trợ doanh nghiệp mở rộng sản phẩm theo từng giai đoạn.
-
----
-
-## 7. So sánh hệ thống hiện tại và hệ thống mới
-
-| Khía cạnh | Hệ thống hiện tại | Hệ thống CAB mới |
-|---|---|---|
-| Yêu cầu đặt xe | Tổng đài hoặc ứng dụng đơn giản | Nền tảng CAB hỗ trợ toàn bộ quy trình |
-| Phân công tài xế | Chủ yếu thủ công | Hỗ trợ tìm và phân công dựa trên vị trí, trạng thái và tiêu chí vận hành |
-| Xử lý tài xế từ chối/không phản hồi | Chưa đáp ứng đầy đủ | Có cơ chế tiếp tục tìm tài xế khác |
-| Theo dõi chuyến | Khó theo dõi | Theo dõi trạng thái chuyến, tài xế và thời gian dự kiến |
-| Vị trí tài xế | Chưa đáp ứng nhu cầu mới | Lưu thông tin vị trí để hỗ trợ tìm tài xế và ước tính thời gian đến |
-| Thanh toán | Thông tin chưa quản lý tập trung | Hỗ trợ tiền mặt và điện tử, tích hợp nhà cung cấp bên ngoài |
-| Dữ liệu thanh toán nhạy cảm | Chưa đáp ứng yêu cầu mới | Không lưu trực tiếp thông tin nhạy cảm trong CAB |
-| Thông báo | Còn hạn chế | Thông báo cho khách hàng và tài xế tại các sự kiện quan trọng |
-| Quản trị | Hạn chế | Giao diện quản trị cho nhân viên vận hành |
-| Phân quyền | Chưa đáp ứng đầy đủ | Kiểm soát quyền đối với thao tác quản trị nhạy cảm |
-| Báo cáo | Chưa đáp ứng đầy đủ | Báo cáo số chuyến, doanh thu, hoàn thành, hủy và hiệu quả tài xế |
-| Khả năng mở rộng | Khó mở rộng | Có khả năng mở rộng độc lập các thành phần |
-| Phát triển chức năng | Khó mở rộng dài hạn | Có thể bổ sung chức năng mới từng phần |
-| Khả năng phát triển sản phẩm | Hạn chế | Hướng tới nền tảng CAB phát triển lâu dài |
-
----
-
-## 8. Business Stakeholders / Business Contacts
-
-Ở giai đoạn B1, tài liệu chưa cung cấp tên hoặc thông tin liên hệ cụ thể của từng cá nhân. Vì vậy chỉ xác định các nhóm stakeholder/business contact theo vai trò nghiệp vụ.
-
-| Stakeholder / Business Contact | Mối quan tâm chính |
+| Hệ thống hiện tại | CAB System |
 |---|---|
-| Ban lãnh đạo ABC | Mục tiêu kinh doanh, khả năng mở rộng, báo cáo, doanh thu và hiệu quả hoạt động |
-| Khách hàng | Đăng ký, đặt xe, theo dõi chuyến, thanh toán, lịch sử và đánh giá |
-| Tài xế | Hồ sơ, phương tiện, trạng thái hoạt động, nhận chuyến và cập nhật trạng thái chuyến |
-| Nhân viên vận hành | Quản lý khách hàng, tài xế, phương tiện, chuyến đi, trạng thái và sự cố |
-| Nhà cung cấp thanh toán bên ngoài | Xử lý giao dịch thanh toán điện tử |
-| Nhà cung cấp dịch vụ thông báo | Cung cấp các kênh gửi thông báo |
+| Phân công tài xế thủ công | Hỗ trợ matching tự động |
+| Khó theo dõi chuyến | Theo dõi trạng thái và thông tin tài xế |
+| Thanh toán chưa tập trung | Quản lý kết quả thanh toán |
+| Khó mở rộng | Có khả năng mở rộng và phát triển thêm |
+| Hỗ trợ vận hành hạn chế | Quản trị và theo dõi tập trung |
 
----
+## 1.5. Business Context chính
 
-## 9. Ràng buộc (Constraints)
+Khách hàng đặt xe
+→ Hệ thống tìm tài xế
+→ Tài xế nhận/từ chối
+→ Tiếp tục tìm nếu cần
+→ Thực hiện chuyến
+→ Hoàn thành
+→ Tính cước
+→ Thanh toán
+→ Thông báo
+→ Lịch sử/đánh giá
 
-### 9.1. Ràng buộc về thời gian
+## 1.6. Open Issues
 
-- Thời gian xây dựng và triển khai sản phẩm: **7 tuần**.
+- OI01: Cách tính cước.
+- OI02: Tiêu chí ưu tiên tài xế.
+- OI03: Thời gian tài xế phải phản hồi.
+- OI04: Chính sách hủy chuyến.
+- OI05: Xử lý mất kết nối.
+- OI06: Thời gian lưu trữ dữ liệu.
+- OI07: Xử lý lại khi thanh toán thất bại.
+- OI08: Phân quyền chi tiết.
+- OI09: Chi tiết báo cáo.
+- OI10: Chính sách dữ liệu vị trí.
 
-Ràng buộc này ảnh hưởng trực tiếp đến việc xác định phạm vi, mức độ ưu tiên và kế hoạch triển khai các chức năng.
+# B2. Xác định Stakeholders
 
-### 9.2. Ràng buộc về thanh toán
+## 2.1. Stakeholders
 
-- Phải tích hợp với nhà cung cấp thanh toán bên ngoài.
-- Không lưu trực tiếp thông tin nhạy cảm của thẻ hoặc tài khoản thanh toán trong hệ thống CAB.
-- Phải có cơ chế thông báo và xử lý lại khi thanh toán điện tử thất bại theo chính sách doanh nghiệp.
+| Stakeholder | Vai trò |
+|---|---|
+| Ban lãnh đạo ABC | Xác định mục tiêu, ưu tiên và đánh giá hiệu quả kinh doanh. |
+| Khách hàng | Đặt xe, theo dõi chuyến, thanh toán, xem lịch sử và đánh giá. |
+| Tài xế | Quản lý trạng thái, nhận/từ chối chuyến và cập nhật trạng thái chuyến. |
+| Nhân viên vận hành | Quản lý khách hàng, tài xế, phương tiện, chuyến đi và xử lý sự cố. |
+| Admin / người có quyền quản trị (cần xác nhận) | Thực hiện các thao tác quản trị nhạy cảm theo phân quyền. |
+| BA | Làm rõ yêu cầu, business process, business rule và các vấn đề chưa xác định. |
+| Development Team | Xây dựng, kiểm thử và triển khai backend service/API. |
+| Payment Provider | Xử lý thanh toán điện tử bên ngoài. |
+| Notification Provider | Cung cấp kênh gửi thông báo. |
+| Tổng đài/CS hiện tại | Quy trình hiện tại, có thể bị ảnh hưởng khi chuyển sang hệ thống mới. |
 
-### 9.3. Ràng buộc về khả năng mở rộng
+## 2.2. Stakeholder Matrix
 
-- Hệ thống phải có khả năng phục vụ số lượng lớn khách hàng và tài xế.
-- Các thành phần phải có khả năng mở rộng độc lập khi tải tăng.
-- Chức năng mới cần có khả năng triển khai từng phần.
+<img width="940" height="874" alt="image" src="https://github.com/user-attachments/assets/73a40ec9-26d9-459e-86ec-65e74591f650" />
 
-### 9.4. Ràng buộc về bảo mật
 
-- Khách hàng và tài xế phải được xác thực trước khi sử dụng các chức năng yêu cầu tài khoản.
-- Các thao tác quản trị phải được kiểm soát quyền truy cập.
-- Thông tin cá nhân phải được bảo vệ.
-- Thông tin phương tiện phải được bảo vệ.
-- Dữ liệu vị trí phải được bảo vệ.
-- Dữ liệu giao dịch phải được bảo vệ.
-- Các thao tác quan trọng phải được lưu vết để phục vụ kiểm tra khi có sự cố.
+# B3. Xác định Business Goals
 
-### 9.5. Ràng buộc về độ ổn định
-
-- Hệ thống phải hoạt động ổn định vào thời điểm nhu cầu tăng cao.
-- Lỗi ở chức năng thanh toán hoặc thông báo không được làm toàn bộ hệ thống đặt xe ngừng hoạt động.
-
----
-
-## 10. Các yêu cầu nghiệp vụ còn chưa rõ (Open Issues)
-
-Đây là các nội dung khách hàng chưa chốt và cần BA làm rõ với các bên liên quan trước khi nhóm phát triển xây dựng giải pháp.
-
-| ID | Vấn đề cần xác nhận | Ảnh hưởng đến |
+| ID | Business Goal | BP liên quan |
 |---|---|---|
-| OI01 | Cách tính cước | Pricing, chuyến đi, thanh toán |
-| OI02 | Tiêu chí ưu tiên tài xế | Tìm và phân công tài xế |
-| OI03 | Thời gian tài xế phải phản hồi | Matching và xử lý timeout |
-| OI04 | Chính sách hủy chuyến | Quy trình chuyến và tính cước |
-| OI05 | Cách xử lý khi mất kết nối mạng | Trạng thái và tính liên tục của chuyến |
-| OI06 | Thời gian lưu trữ dữ liệu | Data management và lịch sử |
-| OI07 | Chính sách xử lý thanh toán thất bại | Payment và retry |
-| OI08 | Cách thông báo khi không tìm được tài xế | Customer experience |
-| OI09 | Phân quyền chi tiết giữa các loại nhân viên vận hành | Authorization |
-| OI10 | Chi tiết các chỉ số và báo cáo cần cung cấp | Reporting |
-| OI11 | Chính sách cụ thể đối với dữ liệu vị trí tài xế | Location tracking và data protection |
-| OI12 | Các chính sách vận hành khác khi nhu cầu tăng cao | Scalability và operations |
+| BG01 | Hỗ trợ quy trình đặt xe từ tạo yêu cầu đến hoàn thành chuyến. | BP01, BP02 |
+| BG02 | Nâng cao hiệu quả tìm và phân công tài xế phù hợp. | BP01 |
+| BG03 | Nâng cao khả năng theo dõi và minh bạch trạng thái chuyến. | BP02 |
+| BG04 | Hỗ trợ xác định số tiền khách hàng phải trả. | BP03 |
+| BG05 | Hỗ trợ thanh toán bằng tiền mặt và điện tử. | BP03 |
+| BG06 | Đảm bảo thông báo cho khách hàng và tài xế tại các mốc chính. | BP02, BP04 |
+| BG07 | Nâng cao khả năng quản lý và kiểm soát vận hành. | BP06 |
+| BG08 | Cung cấp dữ liệu và báo cáo phục vụ quản lý. | BP06 |
+| BG09 | Bảo vệ dữ liệu và kiểm soát thao tác nhạy cảm. | BP06 |
+| BG10 | Duy trì hoạt động ổn định khi nhu cầu tăng cao. | BP05 |
+| BG11 | Tạo nền tảng để mở rộng quy mô và chức năng trong tương lai. | BP04, BP05 |
+| BG12 | Hỗ trợ xử lý các trường hợp ngoại lệ trong quy trình đặt xe, chuyến đi và thanh toán. | BP01, BP03, BP05 |
+| BG13 | Thu thập đánh giá sau chuyến để hỗ trợ đánh giá chất lượng dịch vụ. | BP02, BP06 |
 
----
+# B4. Xác định Scope
 
-## 11. Rủi ro nghiệp vụ cần lưu ý
+## 4.1. In-Scope
 
-### Risk 01. Không thống nhất được business rules
+| Nhóm | Phạm vi | BG |
+|---|---|---|
+| Tài khoản | Đăng ký, đăng nhập, cập nhật hồ sơ khách hàng/tài xế | BG01, BG09 |
+| Đặt xe | Điểm đón, điểm đến, loại xe, tạo yêu cầu | BG01 |
+| Matching | Tìm tài xế, nhận/từ chối, không phản hồi, tìm tài xế tiếp theo | BG02, BG12 |
+| Chuyến đi | Quản lý trạng thái chuyến | BG03 |
+| Vị trí | Lưu vị trí tài xế phục vụ matching/ETA | BG02, BG03, BG09 |
+| Tính cước | Xác định số tiền phải trả | BG04 |
+| Thanh toán | Tiền mặt, điện tử, Payment Provider, xử lý thất bại | BG05, BG12 |
+| Thông báo | Các sự kiện chính của chuyến và thanh toán | BG06 |
+| Lịch sử/đánh giá | Lịch sử chuyến, số tiền, đánh giá tài xế | BG01, BG13 |
+| Vận hành | Quản lý khách hàng, tài xế, phương tiện, chuyến đi, lỗi | BG07, BG12 |
+| Báo cáo | Chuyến, doanh thu, hoàn thành, hủy, hiệu quả tài xế | BG08 |
+| Bảo mật | Xác thực, phân quyền, bảo vệ dữ liệu, audit | BG09 |
+| Reliability/Scalability | Ổn định khi tải tăng, hạn chế ảnh hưởng khi một thành phần lỗi | BG10 |
+| Extensibility | Hỗ trợ mở rộng dịch vụ, thanh toán, notification | BG11 |
 
-Các quy tắc như tính cước, ưu tiên tài xế, timeout và hủy chuyến chưa được xác định rõ có thể làm thay đổi quy trình nghiệp vụ và yêu cầu hệ thống ở các bước sau.
+### Technical Scope
 
-### Risk 02. Phạm vi lớn trong thời gian 7 tuần
+- Xây dựng backend service/API cho các nghiệp vụ trong phạm vi.
+- Tập trung vào minimal viable backend trong thời gian 7 tuần.
+- Thiết kế API đủ để client/ứng dụng sử dụng các nghiệp vụ cốt lõi.
+- Chi tiết công nghệ/kiến trúc sẽ xác định ở các bước sau.
 
-Dự án phải xây dựng và triển khai trong 7 tuần trong khi phạm vi bao gồm đặt xe, matching, chuyến đi, thanh toán, thông báo, quản trị, báo cáo, bảo mật và khả năng mở rộng.
+## 4.2. Out-of-Scope hiện tại
 
-Do đó cần xác định rõ phạm vi ưu tiên cho giai đoạn đầu.
+- UI/mobile/web client.
+- AI/ML tối ưu tuyến đường.
+- AI/ML dự đoán ETA.
+- Khuyến mãi/mã giảm giá.
+- Ví điện tử nội bộ.
+- Chat khách hàng – tài xế.
+- Đa ngôn ngữ/đa tiền tệ.
+- BI/Dashboard nâng cao.
+- Offline-first.
+- Các công nghệ kiến trúc cụ thể chưa được quyết định.
 
-### Risk 03. Phụ thuộc vào hệ thống bên ngoài
+## 4.3. Ưu tiên
 
-Thanh toán điện tử phụ thuộc vào nhà cung cấp thanh toán bên ngoài. Ngoài ra, hệ thống có định hướng mở rộng thêm các nhà cung cấp thông báo trong tương lai.
+**P0 – Core**
+BG01, BG02, BG03, BG04, BG05, BG06, BG12
 
-### Risk 04. Tăng tải vào giờ cao điểm
+**P1 – Operations & Control**
+BG07, BG08, BG09, BG13
 
-Nhu cầu tăng cao có thể ảnh hưởng đến khả năng phục vụ nếu các thành phần không được thiết kế để mở rộng phù hợp.
+**P2 – Growth**
+BG10, BG11
 
-### Risk 05. Lỗi ở một thành phần ảnh hưởng đến hoạt động
+P0 là phạm vi tối thiểu ưu tiên cho backend service trong 7 tuần. P1/P2 được triển khai tùy nguồn lực và ưu tiên được stakeholder xác nhận.
 
-Lỗi ở thanh toán hoặc thông báo không được phép làm toàn bộ hệ thống đặt xe dừng hoạt động.
+# B5. Business Requirements
 
-### Risk 06. Rủi ro về bảo mật và dữ liệu
+| ID | Business Requirement | BG | Scope |
+|---|---|---|---|
+| BR01 | Hệ thống phải hỗ trợ khách hàng và tài xế đăng ký, đăng nhập và cập nhật thông tin cá nhân. | BG01, BG09 | Tài khoản |
+| BR02 | Hệ thống phải cho phép khách hàng nhập điểm đón, điểm đến, chọn loại xe và tạo yêu cầu đặt xe. | BG01 | Đặt xe |
+| BR03 | Hệ thống phải xác định tài xế phù hợp dựa trên vị trí, trạng thái sẵn sàng và tiêu chí vận hành. | BG02 | Matching |
+| BR04 | Hệ thống phải cho phép tài xế chuyển trạng thái sẵn sàng nhận chuyến. | BG02 | Tài khoản/Matching |
+| BR05 | Hệ thống phải cho phép tài xế chấp nhận hoặc từ chối chuyến. | BG02 | Matching |
+| BR06 | Khi tài xế từ chối hoặc không phản hồi, hệ thống phải tiếp tục tìm tài xế khác mà không yêu cầu khách hàng tạo lại yêu cầu. | BG02, BG12 | Matching |
+| BR07 | Khi không tìm được tài xế, hệ thống phải thông báo cho khách hàng. | BG02, BG12 | Matching/Notification |
+| BR08 | Hệ thống phải cập nhật trạng thái chuyến từ tìm tài xế đến hoàn thành chuyến. | BG03 | Chuyến đi |
+| BR09 | Hệ thống phải lưu vị trí tài xế để hỗ trợ matching và dự kiến thời gian đến. | BG02, BG03, BG09 | Vị trí |
+| BR10 | Hệ thống phải xác định số tiền khách hàng phải trả dựa trên loại dịch vụ và thông tin chuyến. | BG04 | Tính cước |
+| BR11 | Hệ thống phải hỗ trợ thanh toán tiền mặt và thanh toán điện tử. | BG05 | Thanh toán |
+| BR12 | Hệ thống phải tích hợp Payment Provider và không lưu trực tiếp dữ liệu thanh toán nhạy cảm. | BG05, BG09 | Thanh toán |
+| BR13 | Khi thanh toán điện tử thất bại, hệ thống phải thông báo và hỗ trợ xử lý lại theo chính sách doanh nghiệp. | BG05, BG12 | Thanh toán |
+| BR14 | Hệ thống phải gửi thông báo cho khách hàng tại các mốc chính của chuyến và thanh toán. | BG06 | Notification |
+| BR15 | Hệ thống phải gửi thông báo cho tài xế khi có chuyến mới hoặc thay đổi chuyến. | BG06 | Notification |
+| BR16 | Hệ thống phải cho phép khách hàng xem lịch sử chuyến và số tiền phải trả. | BG01, BG04 | Lịch sử |
+| BR17 | Hệ thống phải cho phép khách hàng đánh giá tài xế sau chuyến. | BG13 | Đánh giá |
+| BR18 | Hệ thống phải hỗ trợ nhân viên vận hành quản lý khách hàng, tài xế, phương tiện và chuyến đi. | BG07 | Vận hành |
+| BR19 | Hệ thống phải hỗ trợ theo dõi chuyến đang diễn ra và trạng thái tài xế. | BG07 | Vận hành |
+| BR20 | Hệ thống phải hỗ trợ xử lý chuyến bị lỗi và tra cứu lịch sử giao dịch. | BG07, BG12 | Vận hành |
+| BR21 | Hệ thống phải kiểm soát quyền truy cập đối với chức năng quản trị nhạy cảm. | BG09 | Bảo mật |
+| BR22 | Hệ thống phải cung cấp báo cáo về số chuyến, doanh thu, hoàn thành, hủy và hiệu quả tài xế. | BG08 | Báo cáo |
+| BR23 | Hệ thống phải xác thực khách hàng và tài xế trước các chức năng yêu cầu tài khoản. | BG09 | Bảo mật |
+| BR24 | Hệ thống phải bảo vệ thông tin cá nhân, phương tiện, vị trí và giao dịch. | BG09 | Bảo mật |
+| BR25 | Hệ thống phải lưu vết các thao tác quan trọng. | BG09 | Audit |
+| BR26 | Hệ thống phải duy trì hoạt động ổn định khi nhu cầu tăng và hạn chế ảnh hưởng khi thanh toán/thông báo gặp lỗi. | BG10 | Reliability |
+| BR27 | Hệ thống phải có khả năng mở rộng để phục vụ số lượng lớn khách hàng và tài xế. | BG10, BG11 | Scalability |
+| BR28 | Hệ thống phải hỗ trợ mở rộng loại dịch vụ, phương thức thanh toán và kênh/nhà cung cấp thông báo. | BG11 | Extensibility |
+| BR29 | Hệ thống phải hỗ trợ triển khai chức năng mới từng phần với ảnh hưởng hạn chế đến chức năng đang hoạt động. | BG11 | Extensibility |
 
-Hệ thống xử lý thông tin cá nhân, thông tin phương tiện, dữ liệu vị trí và dữ liệu giao dịch nên cần kiểm soát quyền truy cập, bảo vệ dữ liệu và lưu vết thao tác quan trọng.
+## 5.1. Open Issues ảnh hưởng BR
 
----
+| BR | Open Issue |
+|---|---|
+| BR03, BR06 | OI02 – Tiêu chí ưu tiên tài xế |
+| BR06 | OI03 – Thời gian tài xế phản hồi |
+| BR10 | OI01 – Cách tính cước |
+| BR13 | OI07 – Xử lý thanh toán thất bại |
+| BR21 | OI08 – Phân quyền chi tiết |
+| BR22 | OI09 – Chi tiết báo cáo |
+| BR24 | OI06, OI10 – Lưu trữ và bảo vệ dữ liệu |
+| BR26 | OI05 – Xử lý mất kết nối |
+| BR16 | OI04 – Chính sách hủy chuyến |
 
-## 12. Kết luận Bước 1
+## 5.2. Traceability chính
 
-ABC cần xây dựng một nền tảng CAB mới để giải quyết các hạn chế của hệ thống hiện tại, đặc biệt là:
+B1 Business Problems
+↓
+B3 Business Goals
+↓
+B4 Scope
+↓
+B5 Business Requirements
+↓
+B6 Functional Requirements / Use Cases / Business Rules
+↓
+NFR + API Specification
 
-- Phân công tài xế còn phụ thuộc vào thao tác thủ công.
-- Khách hàng khó theo dõi trạng thái chuyến đi.
-- Thông tin thanh toán chưa được quản lý tập trung.
-- Hệ thống khó mở rộng theo nhu cầu tăng trưởng.
-- Khả năng hỗ trợ vận hành, thông báo, báo cáo và kiểm soát hệ thống cần được nâng cao.
-
-Giá trị của hệ thống mới không chỉ nằm ở việc cung cấp chức năng đặt xe mà còn ở việc tạo ra một nền tảng hỗ trợ toàn bộ vòng đời chuyến đi, nâng cao hiệu quả vận hành, cải thiện trải nghiệm khách hàng, hỗ trợ quản lý dữ liệu và báo cáo, đồng thời tạo nền tảng cho việc mở rộng sản phẩm trong tương lai.
-
-Bên cạnh đó, một số business rule và chính sách quan trọng vẫn chưa được xác định, đặc biệt là cách tính cước, tiêu chí ưu tiên tài xế, thời gian phản hồi, chính sách hủy chuyến, xử lý mất kết nối và thời gian lưu trữ dữ liệu. Đây là các nội dung BA cần tiếp tục làm rõ với stakeholder trước khi đặc tả chi tiết ở các bước tiếp theo.
-
----
-
-## 13. Định hướng cho các bước phân tích tiếp theo
-
-Kết quả của B1 là cơ sở để tiếp tục xác định:
-
-1. **Scope của hệ thống**
-2. **Actors và Stakeholders chi tiết**
-3. **Business Process**
-4. **Functional Requirements**
-5. **Non-functional Requirements**
-6. **Business Rules**
-7. **Use Cases**
-8. **Exception / Alternative Flows**
-9. **Các câu hỏi cần xác nhận với khách hàng**
-10. **Các yêu cầu ưu tiên trong phạm vi triển khai 7 tuần**
-
+Các BR01–BR25 là nghiệp vụ chính trong baseline scope. BR26–BR29 mô tả capability cần có và sẽ được chi tiết hóa thành NFR/Architecture Requirements ở các bước sau.

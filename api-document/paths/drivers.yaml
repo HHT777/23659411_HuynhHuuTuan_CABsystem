@@ -1,0 +1,174 @@
+/drivers:
+  get:
+    tags:
+      - Drivers
+    summary: "Lấy danh sách tài xế (quản lý vận hành - UC-16)"
+    operationId: listDrivers
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: "Danh sách tài xế."
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Driver"
+      "401":
+        description: "Chưa xác thực."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/drivers/{driverId}:
+  get:
+    tags:
+      - Drivers
+    summary: "Lấy hồ sơ tài xế theo ID"
+    operationId: getDriver
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: driverId
+        in: path
+        required: true
+        description: "Mã tài xế."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Hồ sơ tài xế."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Driver"
+      "404":
+        description: "Không tìm thấy tài xế."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/drivers/{driverId}/profile:
+  put:
+    tags:
+      - Drivers
+    summary: "Cập nhật hồ sơ tài xế và thông tin phương tiện (UC-03)"
+    operationId: updateDriverProfile
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: driverId
+        in: path
+        required: true
+        description: "Mã tài xế."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              driver:
+                $ref: "../openapi.yaml#/components/schemas/Driver"
+              vehicle:
+                $ref: "../openapi.yaml#/components/schemas/Vehicle"
+    responses:
+      "200":
+        description: "Hồ sơ tài xế được cập nhật."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Driver"
+      "401":
+        $ref: "../openapi.yaml#/components/responses/Unauthorized"
+      "403":
+        description: "Người dùng không có quyền cập nhật hồ sơ này."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+
+/drivers/{driverId}/status:
+  put:
+    tags:
+      - Drivers
+    summary: "Cập nhật trạng thái sẵn sàng (UC-04)"
+    operationId: updateDriverStatus
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: driverId
+        in: path
+        required: true
+        description: "Mã tài xế."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - status
+            properties:
+              status:
+                type: string
+                enum:
+                  - SAN_SANG
+                  - KHONG_SAN_SANG
+    responses:
+      "200":
+        description: "Trạng thái được cập nhật."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Driver"
+      "404":
+        description: "Không tìm thấy tài xế."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/drivers/{driverId}/location:
+  put:
+    tags:
+      - Drivers
+    summary: "Cập nhật vị trí tài xế (UC-08)"
+    operationId: updateDriverLocation
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: driverId
+        in: path
+        required: true
+        description: "Mã tài xế."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/DriverLocation"
+    responses:
+      "200":
+        description: "Vị trí được cập nhật."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/DriverLocation"
+      "404":
+        description: "Không tìm thấy tài xế."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"

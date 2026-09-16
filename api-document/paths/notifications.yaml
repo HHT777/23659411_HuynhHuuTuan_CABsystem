@@ -1,0 +1,72 @@
+/notifications:
+  get:
+    tags: [Notifications]
+    summary: Xem thông báo của người dùng hiện tại
+    operationId: listNotifications
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: unreadOnly
+        in: query
+        schema:
+          type: boolean
+          default: false
+    responses:
+      "200":
+        description: Danh sách thông báo.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Notification"
+      "401":
+        $ref: "../openapi.yaml#/components/responses/Unauthorized"
+
+/notifications/{notificationId}:
+  get:
+    tags: [Notifications]
+    summary: Xem một thông báo
+    operationId: getNotification
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: Thông báo.
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Notification"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+
+/notifications/{notificationId}/read:
+  post:
+    tags: [Notifications]
+    summary: Đánh dấu thông báo đã đọc
+    operationId: markNotificationRead
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: Thông báo đã được đánh dấu đã đọc.
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Notification"
+      "401":
+        $ref: "../openapi.yaml#/components/responses/Unauthorized"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"

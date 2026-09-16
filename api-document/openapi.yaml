@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  description: API cho nền tảng đặt xe CAB System của Công ty ABC.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+tags:
+  - name: Auth
+  - name: Customers
+  - name: Drivers
+  - name: RideRequests
+  - name: Trips
+  - name: Payments
+  - name: Ratings
+  - name: Notifications
+  - name: Vehicles
+  - name: Operators
+  - name: Reports
+  - name: AuditLogs
+paths:
+  /auth/register:
+    $ref: "./paths/auth.yaml#/auth~1register"
+  /auth/login:
+    $ref: "./paths/auth.yaml#/auth~1login"
+  /customers:
+    $ref: "./paths/customers.yaml#/customers"
+  /customers/{customerId}:
+    $ref: "./paths/customers.yaml#/customers~1{customerId}"
+  /drivers:
+    $ref: "./paths/drivers.yaml#/drivers"
+  /drivers/{driverId}:
+    $ref: "./paths/drivers.yaml#/drivers~1{driverId}"
+  /drivers/{driverId}/profile:
+    $ref: "./paths/drivers.yaml#/drivers~1{driverId}~1profile"
+  /drivers/{driverId}/status:
+    $ref: "./paths/drivers.yaml#/drivers~1{driverId}~1status"
+  /drivers/{driverId}/location:
+    $ref: "./paths/drivers.yaml#/drivers~1{driverId}~1location"
+  /ride-requests:
+    $ref: "./paths/ride-requests.yaml#/ride-requests"
+  /ride-requests/{requestId}:
+    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}"
+  /ride-requests/{requestId}/accept:
+    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1accept"
+  /ride-requests/{requestId}/decline:
+    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1decline"
+  /ride-requests/{requestId}/candidates:
+    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1candidates"
+  /ride-requests/{requestId}/reassign:
+    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1reassign"
+  /trips:
+    $ref: "./paths/trips.yaml#/trips"
+  /trips/{tripId}:
+    $ref: "./paths/trips.yaml#/trips~1{tripId}"
+  /trips/{tripId}/status:
+    $ref: "./paths/trips.yaml#/trips~1{tripId}~1status"
+  /trips/{tripId}/fare:
+    $ref: "./paths/trips.yaml#/trips~1{tripId}~1fare"
+  /payments:
+    $ref: "./paths/payments.yaml#/payments"
+  /payments/{paymentId}:
+    $ref: "./paths/payments.yaml#/payments~1{paymentId}"
+  /ratings:
+    $ref: "./paths/ratings.yaml#/ratings"
+  /ratings/{ratingId}:
+    $ref: "./paths/ratings.yaml#/ratings~1{ratingId}"
+  /vehicles:
+    $ref: "./paths/vehicles.yaml#/vehicles"
+  /vehicles/{vehicleId}:
+    $ref: "./paths/vehicles.yaml#/vehicles~1{vehicleId}"
+  /notifications:
+    $ref: "./paths/notifications.yaml#/notifications"
+  /notifications/{notificationId}:
+    $ref: "./paths/notifications.yaml#/notifications~1{notificationId}"
+  /notifications/{notificationId}/read:
+    $ref: "./paths/notifications.yaml#/notifications~1{notificationId}~1read"
+  /operators:
+    $ref: "./paths/operators.yaml#/operators"
+  /operators/{operatorId}:
+    $ref: "./paths/operators.yaml#/operators~1{operatorId}"
+  /operators/trips/{tripId}/support:
+    $ref: "./paths/operators.yaml#/operators~1trips~1{tripId}~1support"
+  /audit-logs:
+    $ref: "./paths/operators.yaml#/audit-logs"
+  /reports/operations:
+    $ref: "./paths/reports.yaml#/reports~1operations"
+  /reports/revenue:
+    $ref: "./paths/reports.yaml#/reports~1revenue"
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: "./components/securitySchemes.yaml#/bearerAuth"
+  schemas:
+    User:
+      $ref: "./components/schemas/User.yaml#/User"
+    Customer:
+      $ref: "./components/schemas/Customer.yaml#/Customer"
+    Driver:
+      $ref: "./components/schemas/Driver.yaml#/Driver"
+    DriverLocation:
+      $ref: "./components/schemas/DriverLocation.yaml#/DriverLocation"
+    Vehicle:
+      $ref: "./components/schemas/Vehicle.yaml#/Vehicle"
+    RideRequest:
+      $ref: "./components/schemas/RideRequest.yaml#/RideRequest"
+    Trip:
+      $ref: "./components/schemas/Trip.yaml#/Trip"
+    Fare:
+      $ref: "./components/schemas/Fare.yaml#/Fare"
+    Payment:
+      $ref: "./components/schemas/Payment.yaml#/Payment"
+    Rating:
+      $ref: "./components/schemas/Rating.yaml#/Rating"
+    Notification:
+      $ref: "./components/schemas/Notification.yaml#/Notification"
+    Operator:
+      $ref: "./components/schemas/Operator.yaml#/Operator"
+    AuditLog:
+      $ref: "./components/schemas/Operator.yaml#/AuditLog"
+    MatchCandidate:
+      $ref: "./components/schemas/RideRequest.yaml#/MatchCandidate"
+    Error:
+      $ref: "./components/schemas/Error.yaml#/Error"
+    RegisterRequest:
+      $ref: "./components/schemas/Auth.yaml#/RegisterRequest"
+    LoginRequest:
+      $ref: "./components/schemas/Auth.yaml#/LoginRequest"
+    LoginResponse:
+      $ref: "./components/schemas/Auth.yaml#/LoginResponse"
+    ReportPeriod:
+      $ref: "./components/schemas/Report.yaml#/ReportPeriod"
+    OperationsReport:
+      $ref: "./components/schemas/Report.yaml#/OperationsReport"
+    RevenueReport:
+      $ref: "./components/schemas/Report.yaml#/RevenueReport"
+  responses:
+    Unauthorized:
+      description: Chưa xác thực.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Không tìm thấy tài nguyên.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

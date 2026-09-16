@@ -1,0 +1,212 @@
+/ride-requests:
+  post:
+    tags:
+      - RideRequests
+    summary: "Tạo yêu cầu đặt xe (UC-05)"
+    operationId: createRideRequest
+    security:
+      - bearerAuth: []
+    description: "Khách hàng nhập điểm đón, điểm đến, loại xe và gửi yêu cầu."
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/RideRequest"
+    responses:
+      "201":
+        description: "Yêu cầu được tạo, hệ thống bắt đầu tìm tài xế."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/RideRequest"
+      "400":
+        description: "Dữ liệu không hợp lệ."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/ride-requests/{requestId}:
+  get:
+    tags:
+      - RideRequests
+    summary: "Lấy chi tiết yêu cầu đặt xe"
+    operationId: getRideRequest
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        description: "Mã yêu cầu đặt xe."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Chi tiết yêu cầu."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/RideRequest"
+      "404":
+        description: "Không tìm thấy yêu cầu."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/ride-requests/{requestId}/accept:
+  post:
+    tags:
+      - RideRequests
+    summary: "Tài xế nhận chuyến (UC-07)"
+    operationId: acceptRideRequest
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        description: "Mã yêu cầu đặt xe."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - driverId
+            properties:
+              driverId:
+                type: string
+                description: "Mã tài xế nhận chuyến."
+    responses:
+      "200":
+        description: "Tài xế đã nhận chuyến, tạo ra Trip."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Trip"
+      "404":
+        description: "Không tìm thấy yêu cầu."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/ride-requests/{requestId}/decline:
+  post:
+    tags:
+      - RideRequests
+    summary: "Tài xế từ chối chuyến (UC-07)"
+    operationId: declineRideRequest
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        description: "Mã yêu cầu đặt xe."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - driverId
+            properties:
+              driverId:
+                type: string
+                description: "Mã tài xế từ chối."
+    responses:
+      "200":
+        description: "Đã ghi nhận từ chối, hệ thống tiếp tục tìm tài xế khác."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/RideRequest"
+      "404":
+        description: "Không tìm thấy yêu cầu."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/ride-requests/{requestId}/candidates:
+  get:
+    tags:
+      - RideRequests
+    summary: "Xem danh sách tài xế phù hợp được đề xuất (UC-06)"
+    operationId: listRideRequestCandidates
+    security:
+      - bearerAuth: []
+    description: "Phục vụ nhân viên vận hành kiểm tra matching theo vị trí, trạng thái sẵn sàng và tiêu chí còn cần xác nhận."
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        description: "Mã yêu cầu đặt xe."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Danh sách tài xế được đề xuất."
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/MatchCandidate"
+      "401":
+        $ref: "../openapi.yaml#/components/responses/Unauthorized"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"
+
+/ride-requests/{requestId}/reassign:
+  post:
+    tags:
+      - RideRequests
+    summary: "Chuyển yêu cầu sang tài xế khác (UC-06/UC-07)"
+    operationId: reassignRideRequest
+    security:
+      - bearerAuth: []
+    description: "Dùng khi tài xế từ chối hoặc không phản hồi. Thời gian chờ và chính sách chuyển tiếp còn cần làm rõ theo SRS."
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        description: "Mã yêu cầu đặt xe."
+        schema:
+          type: string
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              previousDriverId:
+                type: string
+              reason:
+                type: string
+                enum:
+                  - DRIVER_DECLINED
+                  - DRIVER_TIMEOUT
+                  - OPERATOR_REASSIGN
+    responses:
+      "200":
+        description: "Yêu cầu được chuyển tiếp hoặc kết thúc nếu không còn tài xế."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/RideRequest"
+      "401":
+        $ref: "../openapi.yaml#/components/responses/Unauthorized"
+      "404":
+        $ref: "../openapi.yaml#/components/responses/NotFound"

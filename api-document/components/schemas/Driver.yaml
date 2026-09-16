@@ -1,0 +1,25 @@
+Driver:
+  type: object
+  description: "Thông tin và trạng thái tài xế (ENT-03)."
+  required:
+    - status
+  properties:
+    driverId:
+      type: string
+      description: "Mã tài xế (PK)."
+      example: "D-3001"
+    userId:
+      type: string
+      description: "Liên kết tài khoản (FK -> User)."
+      example: "U-1002"
+    status:
+      type: string
+      description: "Trạng thái sẵn sàng nhận chuyến."
+      enum:
+        - SAN_SANG
+        - KHONG_SAN_SANG
+      example: "SAN_SANG"
+    vehicleId:
+      type: string
+      description: "Phương tiện của tài xế (FK -> Vehicle, tùy chọn)."
+      example: "V-4001"

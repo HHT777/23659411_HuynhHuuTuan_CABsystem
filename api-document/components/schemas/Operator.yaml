@@ -1,0 +1,49 @@
+Operator:
+  type: object
+  description: "Nhân viên vận hành (ENT-12)."
+  required:
+    - userId
+  properties:
+    operatorId:
+      type: string
+      description: "Mã nhân viên vận hành (PK)."
+      example: "O-12001"
+    userId:
+      type: string
+      description: "Liên kết tài khoản (FK -> User)."
+      example: "U-1003"
+    permission:
+      type: string
+      description: "Quyền thao tác (ma trận quyền cần làm rõ - OI08)."
+      example: "operator"
+
+AuditLog:
+  type: object
+  description: "Lưu vết thao tác quan trọng phục vụ kiểm tra sự cố (FR-35)."
+  required:
+    - actorUserId
+    - action
+    - createdAt
+  properties:
+    auditLogId:
+      type: string
+      example: "A-13001"
+    actorUserId:
+      type: string
+      description: "Người thực hiện thao tác."
+      example: "U-1003"
+    action:
+      type: string
+      description: "Tên thao tác quan trọng đã được ghi nhận."
+      example: "SUPPORT_TRIP"
+    targetType:
+      type: string
+      example: "Trip"
+    targetId:
+      type: string
+      example: "T-6001"
+    note:
+      type: string
+    createdAt:
+      type: string
+      format: date-time

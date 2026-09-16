@@ -1,0 +1,37 @@
+User:
+  type: object
+  description: "Tài khoản chung cho khách hàng, tài xế và nhân viên vận hành (ENT-01)."
+  required:
+    - email
+    - password
+    - role
+  properties:
+    userId:
+      type: string
+      description: "Mã định danh người dùng (PK)."
+      example: "U-1001"
+    email:
+      type: string
+      format: email
+      description: "Email dùng để đăng nhập (Unique)."
+      example: "khang@gmail.com"
+    phone:
+      type: string
+      description: "Số điện thoại đăng nhập (Unique, tùy chọn nếu có email)."
+      example: "0901234567"
+    password:
+      type: string
+      format: password
+      description: "Mật khẩu (không lưu plaintext, chỉ lưu PasswordHash)."
+      example: "secret123"
+    role:
+      type: string
+      description: "Loại người dùng."
+      enum:
+        - customer
+        - driver
+        - operator
+    createdAt:
+      type: string
+      format: date-time
+      description: "Thời điểm tạo tài khoản."

@@ -1,0 +1,47 @@
+RegisterRequest:
+  type: object
+  required:
+    - email
+    - password
+    - role
+  properties:
+    email:
+      type: string
+      format: email
+    phone:
+      type: string
+    password:
+      type: string
+      format: password
+      minLength: 8
+    role:
+      type: string
+      enum: [customer, driver]
+    name:
+      type: string
+
+LoginRequest:
+  type: object
+  required: [login, password]
+  properties:
+    login:
+      type: string
+      description: Email hoặc số điện thoại.
+    password:
+      type: string
+      format: password
+
+LoginResponse:
+  type: object
+  required: [accessToken, tokenType, user]
+  properties:
+    accessToken:
+      type: string
+    tokenType:
+      type: string
+      enum: [Bearer]
+    expiresIn:
+      type: integer
+      description: Thời hạn token tính bằng giây.
+    user:
+      $ref: "../../openapi.yaml#/components/schemas/User"

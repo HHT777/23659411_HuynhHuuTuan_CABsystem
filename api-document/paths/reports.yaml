@@ -1,0 +1,67 @@
+/reports/operations:
+  get:
+    tags: [Reports]
+    summary: Báo cáo hoạt động và hiệu quả tài xế (UC-18)
+    operationId: getOperationsReport
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+    responses:
+      "200":
+        description: Báo cáo hoạt động.
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/OperationsReport"
+      "403":
+        description: Chỉ operator hoặc lãnh đạo được xem báo cáo.
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/reports/revenue:
+  get:
+    tags: [Reports]
+    summary: Báo cáo doanh thu (UC-18)
+    operationId: getRevenueReport
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+    responses:
+      "200":
+        description: Báo cáo doanh thu.
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/RevenueReport"
+      "403":
+        description: Không có quyền xem báo cáo.
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"

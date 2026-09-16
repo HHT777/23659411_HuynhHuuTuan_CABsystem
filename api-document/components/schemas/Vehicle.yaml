@@ -1,0 +1,19 @@
+Vehicle:
+  type: object
+  description: "Phương tiện gắn với tài xế (ENT-04)."
+  required:
+    - licensePlate
+    - vehicleType
+  properties:
+    vehicleId:
+      type: string
+      description: "Mã phương tiện (PK)."
+      example: "V-4001"
+    licensePlate:
+      type: string
+      description: "Biển số xe (Unique)."
+      example: "51F-123.45"
+    vehicleType:
+      type: string
+      description: "Loại xe (ví dụ: 4 chỗ, 7 chỗ)."
+      example: "4 cho"

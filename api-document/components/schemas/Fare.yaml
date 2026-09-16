@@ -1,0 +1,26 @@
+Fare:
+  type: object
+  description: "Số tiền phải trả của chuyến (ENT-08)."
+  required:
+    - tripId
+    - amount
+  properties:
+    fareId:
+      type: string
+      description: "Mã cước (PK)."
+      example: "F-8001"
+    tripId:
+      type: string
+      description: "Chuyến liên quan (FK -> Trip)."
+      example: "T-6001"
+    amount:
+      type: number
+      format: double
+      description: "Số tiền phải trả (VND)."
+      example: 125000
+    currency:
+      type: string
+      description: "Đơn vị tiền tệ."
+      enum:
+        - VND
+      example: "VND"

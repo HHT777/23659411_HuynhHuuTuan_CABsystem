@@ -1,0 +1,85 @@
+/customers:
+  get:
+    tags:
+      - Customers
+    summary: "Lấy danh sách khách hàng (quản lý vận hành - UC-16)"
+    operationId: listCustomers
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: "Danh sách khách hàng."
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Customer"
+      "401":
+        description: "Chưa xác thực."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/customers/{customerId}:
+  get:
+    tags:
+      - Customers
+    summary: "Lấy hồ sơ khách hàng theo ID"
+    operationId: getCustomer
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: customerId
+        in: path
+        required: true
+        description: "Mã khách hàng."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Hồ sơ khách hàng."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Customer"
+      "404":
+        description: "Không tìm thấy khách hàng."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+  put:
+    tags:
+      - Customers
+    summary: "Cập nhật thông tin cá nhân (UC-03)"
+    operationId: updateCustomer
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: customerId
+        in: path
+        required: true
+        description: "Mã khách hàng."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/Customer"
+    responses:
+      "200":
+        description: "Cập nhật thành công."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Customer"
+      "404":
+        description: "Không tìm thấy khách hàng."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"

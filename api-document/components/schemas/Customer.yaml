@@ -1,0 +1,23 @@
+Customer:
+  type: object
+  description: "Thông tin khách hàng (ENT-02)."
+  required:
+    - name
+    - phoneNumber
+  properties:
+    customerId:
+      type: string
+      description: "Mã khách hàng (PK)."
+      example: "C-2001"
+    userId:
+      type: string
+      description: "Liên kết tài khoản (FK -> User)."
+      example: "U-1001"
+    name:
+      type: string
+      description: "Họ tên khách hàng."
+      example: "Nguyen Van Khang"
+    phoneNumber:
+      type: string
+      description: "Số điện thoại (Unique)."
+      example: "0901234567"

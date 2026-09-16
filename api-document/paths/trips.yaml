@@ -1,0 +1,146 @@
+/trips:
+  get:
+    tags:
+      - Trips
+    summary: "Lấy danh sách chuyến đi (lịch sử - UC-14 / quản lý - UC-16)"
+    operationId: listTrips
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: customerId
+        in: query
+        required: false
+        description: "Lọc theo khách hàng."
+        schema:
+          type: string
+      - name: driverId
+        in: query
+        required: false
+        description: "Lọc theo tài xế."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Danh sách chuyến đi."
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../openapi.yaml#/components/schemas/Trip"
+      "401":
+        description: "Chưa xác thực."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/trips/{tripId}:
+  get:
+    tags:
+      - Trips
+    summary: "Theo dõi chuyến - lấy chi tiết (UC-10)"
+    operationId: getTrip
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: tripId
+        in: path
+        required: true
+        description: "Mã chuyến đi."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Chi tiết chuyến đi và trạng thái hiện tại."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Trip"
+      "404":
+        description: "Không tìm thấy chuyến đi."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/trips/{tripId}/status:
+  put:
+    tags:
+      - Trips
+    summary: "Cập nhật trạng thái chuyến (UC-09)"
+    operationId: updateTripStatus
+    security:
+      - bearerAuth: []
+    description: "Tài xế cập nhật mốc chuyến, chuyển đúng thứ tự quy trình (BR_07)."
+    parameters:
+      - name: tripId
+        in: path
+        required: true
+        description: "Mã chuyến đi."
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - status
+            properties:
+              status:
+                type: string
+                enum:
+                  - DA_DEN_DIEM_DON
+                  - DA_DON_KHACH
+                  - DANG_DI_CHUYEN
+                  - HOAN_THANH
+    responses:
+      "200":
+        description: "Trạng thái chuyến được cập nhật (kèm thông báo nếu cần)."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Trip"
+      "400":
+        description: "Trạng thái sai thứ tự quy trình."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+      "404":
+        description: "Không tìm thấy chuyến đi."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/trips/{tripId}/fare:
+  get:
+    tags:
+      - Trips
+    summary: "Tính cước chuyến đi (UC-11)"
+    operationId: getFare
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: tripId
+        in: path
+        required: true
+        description: "Mã chuyến đi."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Số tiền phải trả."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Fare"
+      "404":
+        description: "Không tìm thấy chuyến đi."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"

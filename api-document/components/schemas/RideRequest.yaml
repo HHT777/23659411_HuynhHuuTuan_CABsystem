@@ -1,0 +1,72 @@
+RideRequest:
+  type: object
+  description: "Yêu cầu đặt xe của khách hàng (ENT-05)."
+  required:
+    - pickupLocation
+    - dropoffLocation
+    - vehicleType
+  properties:
+    requestId:
+      type: string
+      description: "Mã định danh yêu cầu (PK)."
+      example: "R-5001"
+    customerId:
+      type: string
+      description: "Khách đặt xe (FK -> Customer)."
+      example: "C-2001"
+    pickupLocation:
+      type: string
+      description: "Điểm đón."
+      example: "227 Nguyen Van Cu, Q5"
+    dropoffLocation:
+      type: string
+      description: "Điểm đến."
+      example: "San bay Tan Son Nhat"
+    vehicleType:
+      type: string
+      description: "Loại xe yêu cầu."
+      example: "4 cho"
+    status:
+      type: string
+      description: "Trạng thái yêu cầu."
+      enum:
+        - TIM_TAI_XE
+        - KHONG_TIM_DUOC
+        - DA_NHAN
+      example: "TIM_TAI_XE"
+    createdAt:
+      type: string
+      format: date-time
+      description: "Thời điểm tạo yêu cầu."
+
+MatchCandidate:
+  type: object
+  description: "Tài xế được hệ thống đề xuất cho một yêu cầu đặt xe (UC-06). Tiêu chí matching còn cần xác nhận theo OI02."
+  required:
+    - requestId
+    - driverId
+    - status
+  properties:
+    requestId:
+      type: string
+      example: "R-5001"
+    driverId:
+      type: string
+      example: "D-3001"
+    distanceText:
+      type: string
+      description: "Khoảng cách ước tính từ tài xế đến điểm đón, nếu hệ thống có dữ liệu."
+      example: "1.2 km"
+    etaText:
+      type: string
+      description: "Thời gian dự kiến đến, còn cần làm rõ nguồn dữ liệu ETA."
+      example: "5 phút"
+    status:
+      type: string
+      enum:
+        - DE_XUAT
+        - DA_GUI_CHO_TAI_XE
+        - BI_TU_CHOI
+        - KHONG_PHAN_HOI
+        - DA_CHON
+      example: "DE_XUAT"

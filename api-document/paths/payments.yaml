@@ -1,0 +1,57 @@
+/payments:
+  post:
+    tags:
+      - Payments
+    summary: "Thanh toán chuyến đi (UC-12)"
+    operationId: createPayment
+    security:
+      - bearerAuth: []
+    description: "Ghi nhận thanh toán tiền mặt hoặc điện tử; không lưu dữ liệu nhạy cảm (BR_12)."
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/Payment"
+    responses:
+      "201":
+        description: "Thanh toán được ghi nhận."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Payment"
+      "400":
+        description: "Dữ liệu không hợp lệ."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"
+
+/payments/{paymentId}:
+  get:
+    tags:
+      - Payments
+    summary: "Tra cứu giao dịch thanh toán"
+    operationId: getPayment
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: paymentId
+        in: path
+        required: true
+        description: "Mã giao dịch."
+        schema:
+          type: string
+    responses:
+      "200":
+        description: "Chi tiết giao dịch."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Payment"
+      "404":
+        description: "Không tìm thấy giao dịch."
+        content:
+          application/json:
+            schema:
+              $ref: "../openapi.yaml#/components/schemas/Error"

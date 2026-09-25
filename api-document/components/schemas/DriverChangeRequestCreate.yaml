@@ -1,0 +1,30 @@
+type: object
+description: Yêu cầu đổi giấy tờ hoặc phương tiện; chỉ có hiệu lực sau khi Vận hành duyệt.
+minProperties: 2
+additionalProperties: false
+properties:
+  changeType:
+    type: string
+    enum: [DRIVER_DOCUMENT, VEHICLE]
+  driverLicenseNumber:
+    type: string
+    minLength: 4
+    maxLength: 50
+  driverLicenseDocumentReference:
+    type: string
+    minLength: 1
+    maxLength: 255
+  licensePlate:
+    type: string
+    minLength: 5
+    maxLength: 20
+    pattern: ^[A-Za-z0-9.-]{5,20}$
+  vehicleType:
+    type: string
+    enum: [MOTORCYCLE, CAR_4]
+  registrationDocumentReference:
+    type: string
+    minLength: 1
+    maxLength: 255
+required: [changeType]
+

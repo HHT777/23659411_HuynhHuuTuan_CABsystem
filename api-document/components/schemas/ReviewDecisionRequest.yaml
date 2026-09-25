@@ -1,0 +1,14 @@
+type: object
+description: Quyết định xét duyệt của Nhân viên vận hành.
+additionalProperties: false
+properties:
+  decision:
+    type: string
+    enum: [APPROVE, REJECT]
+  note:
+    type: string
+    description: Bắt buộc theo nghiệp vụ khi từ chối.
+    minLength: 1
+    maxLength: 500
+required: [decision]
+

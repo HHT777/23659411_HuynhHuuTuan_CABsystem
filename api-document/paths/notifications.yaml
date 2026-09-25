@@ -1,10 +1,11 @@
 /api/v1/notifications:
   get:
     tags:
-    - Notifications
+    - 02 - Khách hàng (CUSTOMER)
+    - 03 - Tài xế (DRIVER)
     operationId: listMyNotifications
-    summary: Danh sách thông báo
-    description: Trả thông báo in-app của tài khoản đang xác thực.
+    summary: Xem thông báo của tài khoản
+    description: Trả thông báo in-app của tài khoản đang xác thực. Notification Provider được gọi qua adapter nội bộ, không có webhook công khai trong pilot.
     x-srs-ref: UC-13; FR-09; FR-15; FR-18; FR-26; FR-27; BRULE-11
     x-roles:
     - CUSTOMER
@@ -30,9 +31,10 @@
 /api/v1/notifications/{id}:
   patch:
     tags:
-    - Notifications
+    - 02 - Khách hàng (CUSTOMER)
+    - 03 - Tài xế (DRIVER)
     operationId: markNotificationRead
-    summary: Đánh dấu thông báo đã đọc
+    summary: Đánh dấu thông báo của tài khoản đã đọc
     description: Chỉ người nhận sở hữu thông báo được cập nhật.
     x-srs-ref: UC-13; BRULE-11
     x-roles:

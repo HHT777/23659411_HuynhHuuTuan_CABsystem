@@ -1,12 +1,13 @@
 type: object
-description: Cấp hoặc thu hồi vai trò vận hành.
+description: Thay thế toàn bộ vai trò quản trị được gán cho tài khoản đích; danh sách rỗng thu hồi mọi vai trò quản trị. Không thay đổi vai trò CUSTOMER hoặc DRIVER.
+additionalProperties: false
 properties:
-  role:
-    type: string
-    description: Vai trò quản trị được phép cấu hình.
-    example: OPERATOR
-    enum:
-    - OPERATOR
-    - EXECUTIVE
-required:
-- role
+  roles:
+    type: array
+    description: Danh sách đích duy nhất; ADMIN chỉ được gán OPERATOR hoặc EXECUTIVE trong contract này.
+    uniqueItems: true
+    maxItems: 2
+    items:
+      type: string
+      enum: [OPERATOR, EXECUTIVE]
+required: [roles]

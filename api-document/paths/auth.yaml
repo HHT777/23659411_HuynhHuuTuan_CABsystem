@@ -1,9 +1,9 @@
 /api/v1/auth/register:
   post:
     tags:
-    - Authentication and Accounts
+    - 01 - Công khai và Tích hợp
     operationId: registerCustomer
-    summary: Đăng ký khách hàng
+    summary: Khách hàng đăng ký tài khoản
     description: Tạo tài khoản khách hàng bằng số điện thoại duy nhất.
     x-srs-ref: UC-01; FR-01; BRULE-01
     x-roles:
@@ -40,9 +40,9 @@
 /api/v1/auth/login:
   post:
     tags:
-    - Authentication and Accounts
+    - 01 - Công khai và Tích hợp
     operationId: login
-    summary: Đăng nhập
+    summary: Đăng nhập và lấy token theo vai trò
     description: Xác thực tài khoản và phát access token 30 phút cùng refresh token 7 ngày.
     x-srs-ref: UC-02; FR-04; BRULE-01
     x-roles:
@@ -76,7 +76,7 @@
 /api/v1/auth/refresh:
   post:
     tags:
-    - Authentication and Accounts
+    - 01 - Công khai và Tích hợp
     operationId: refreshAccessToken
     summary: Làm mới token
     description: Xoay vòng refresh token và cấp access token mới.
@@ -111,7 +111,11 @@
 /api/v1/auth/logout:
   post:
     tags:
-    - Authentication and Accounts
+    - 02 - Khách hàng (CUSTOMER)
+    - 03 - Tài xế (DRIVER)
+    - 04 - Nhân viên vận hành (OPERATOR)
+    - 05 - Ban lãnh đạo (EXECUTIVE)
+    - 06 - Quản trị viên (ADMIN)
     operationId: logout
     summary: Đăng xuất
     description: Thu hồi refresh token của phiên hiện tại.
@@ -127,5 +131,7 @@
         description: Đăng xuất thành công, không có nội dung.
       '401':
         $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
       '500':
         $ref: ../components/responses/InternalServerError.yaml

@@ -1,11 +1,11 @@
 /api/v1/reports/operations:
   get:
     tags:
-    - Reporting
+    - 05 - Ban lãnh đạo (EXECUTIVE)
+    - 06 - Quản trị viên (ADMIN)
     operationId: getOperationsReport
-    summary: Báo cáo vận hành
-    description: Tổng hợp chuyến, doanh thu, tỷ lệ hoàn thành/hủy và hiệu suất tài xế theo Asia/Ho_Chi_Minh; mẫu số 0 trả
-      null/N/A.
+    summary: Xem báo cáo vận hành
+    description: Tổng hợp chuyến, doanh thu và tỷ lệ hoàn thành/hủy theo Asia/Ho_Chi_Minh. Công thức hiệu suất tài xế là TBD nên chưa công bố giá trị trong contract.
     x-srs-ref: UC-18; FR-36..FR-38; NFR-01..NFR-03
     x-roles:
     - EXECUTIVE

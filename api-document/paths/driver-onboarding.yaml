@@ -1,0 +1,230 @@
+/api/v1/auth/driver-registrations:
+  post:
+    tags: [01 - Công khai và Tích hợp]
+    operationId: registerDriver
+    summary: Tài xế gửi hồ sơ đăng ký
+    description: Tạo tài khoản ở trạng thái PENDING_APPROVAL và hồ sơ PENDING_REVIEW. Tài xế chưa được nhận chuyến cho đến khi Vận hành duyệt.
+    x-srs-ref: UC-01; FR-02; FR-03; FR-06; BRULE-01; BRULE-02
+    x-roles: [PUBLIC]
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/DriverRegistrationRequest.yaml
+    responses:
+      '201':
+        description: Hồ sơ đăng ký đã được tiếp nhận để xét duyệt.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/DriverApplicationResponse.yaml
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '409': {$ref: ../components/responses/Conflict.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/drivers/me/profile:
+  get:
+    tags: [03 - Tài xế (DRIVER)]
+    operationId: getMyDriverProfile
+    summary: Tài xế xem hồ sơ nghiệp vụ
+    description: Trả hồ sơ nghiệp vụ, trạng thái tài khoản, xét duyệt và sẵn sàng của chính tài xế.
+    x-srs-ref: UC-03; FR-06; BRULE-01; BRULE-02
+    x-roles: [DRIVER]
+    responses:
+      '200':
+        description: Hồ sơ tài xế.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/DriverResponse.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '404': {$ref: ../components/responses/NotFound.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+  patch:
+    tags: [03 - Tài xế (DRIVER)]
+    operationId: updateMyDriverProfile
+    summary: Tài xế cập nhật thông tin nghiệp vụ thông thường
+    description: Chỉ cập nhật trường không cần xét duyệt. Giấy tờ và phương tiện phải gửi qua change-requests.
+    x-srs-ref: UC-03; FR-06; BRULE-01; BRULE-02
+    x-roles: [DRIVER]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: ../components/schemas/DriverProfileUpdateRequest.yaml}
+    responses:
+      '200':
+        description: Hồ sơ đã cập nhật.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/DriverResponse.yaml}
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/drivers/me/vehicle:
+  get:
+    tags: [03 - Tài xế (DRIVER)]
+    operationId: getMyDriverVehicle
+    summary: Tài xế xem phương tiện đang có hiệu lực
+    description: Thay đổi phương tiện chưa được duyệt không làm thay đổi dữ liệu trả về tại đây.
+    x-srs-ref: UC-03; FR-06; BRULE-02
+    x-roles: [DRIVER]
+    responses:
+      '200':
+        description: Phương tiện đang có hiệu lực.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/VehicleResponse.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '404': {$ref: ../components/responses/NotFound.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/drivers/me/change-requests:
+  post:
+    tags: [03 - Tài xế (DRIVER)]
+    operationId: createMyDriverChangeRequest
+    summary: Tài xế gửi yêu cầu đổi giấy tờ hoặc phương tiện
+    description: Dữ liệu đề nghị chưa có hiệu lực cho đến khi Vận hành duyệt. Thời hạn duyệt là TBD.
+    x-srs-ref: UC-03; FR-06; FR-35; BRULE-02; BRULE-14
+    x-roles: [DRIVER]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: ../components/schemas/DriverChangeRequestCreate.yaml}
+    responses:
+      '201':
+        description: Yêu cầu thay đổi đã được ghi nhận.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/DriverChangeRequestResponse.yaml}
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '409': {$ref: ../components/responses/Conflict.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/driver-applications:
+  get:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: listDriverApplicationsForOperations
+    summary: Vận hành tra cứu hồ sơ đăng ký tài xế
+    description: Trả danh sách hồ sơ theo phạm vi nhiệm vụ; không tự cấp quyền nhận chuyến.
+    x-srs-ref: UC-16; FR-03; FR-31; FR-32; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/Page.yaml}
+      - {$ref: ../components/parameters/Size.yaml}
+    responses:
+      '200':
+        description: Danh sách hồ sơ đăng ký.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: ../components/schemas/PaginatedResponse.yaml}
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: {$ref: ../components/schemas/DriverApplicationResponse.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/driver-applications/{id}:
+  patch:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: reviewDriverApplication
+    summary: Vận hành duyệt hồ sơ đăng ký tài xế
+    description: APPROVE kích hoạt tài khoản nhưng giữ availability OFFLINE; REJECT cần lý do nghiệp vụ. Thao tác được audit.
+    x-srs-ref: UC-16; FR-03; FR-31; FR-32; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/ResourceId.yaml}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: ../components/schemas/ReviewDecisionRequest.yaml}
+    responses:
+      '200':
+        description: Quyết định xét duyệt đã được ghi nhận.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/DriverApplicationResponse.yaml}
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '404': {$ref: ../components/responses/NotFound.yaml}
+      '409': {$ref: ../components/responses/Conflict.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/driver-change-requests:
+  get:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: listDriverChangeRequestsForOperations
+    summary: Vận hành tra cứu yêu cầu đổi hồ sơ tài xế
+    x-srs-ref: UC-16; FR-31; FR-32; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/Page.yaml}
+      - {$ref: ../components/parameters/Size.yaml}
+    responses:
+      '200':
+        description: Danh sách yêu cầu thay đổi.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: ../components/schemas/PaginatedResponse.yaml}
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: {$ref: ../components/schemas/DriverChangeRequestResponse.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/driver-change-requests/{id}:
+  patch:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: reviewDriverChangeRequest
+    summary: Vận hành duyệt thay đổi hồ sơ hoặc phương tiện
+    description: Chỉ khi APPROVE, dữ liệu đề nghị mới thay thế dữ liệu đang có hiệu lực. Thao tác được audit.
+    x-srs-ref: UC-16; FR-31; FR-32; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/ResourceId.yaml}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: ../components/schemas/ReviewDecisionRequest.yaml}
+    responses:
+      '200':
+        description: Yêu cầu thay đổi đã được xét duyệt.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/DriverChangeRequestResponse.yaml}
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '404': {$ref: ../components/responses/NotFound.yaml}
+      '409': {$ref: ../components/responses/Conflict.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+

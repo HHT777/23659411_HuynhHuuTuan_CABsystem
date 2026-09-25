@@ -1,0 +1,52 @@
+type: object
+description: Hồ sơ đăng ký tài xế tự gửi để Vận hành xét duyệt. Tạo đăng ký không kích hoạt quyền nhận chuyến.
+properties:
+  phone:
+    type: string
+    description: Số điện thoại duy nhất của tài khoản.
+    example: '+84905551234'
+    minLength: 9
+    maxLength: 15
+    pattern: ^\+?[0-9]{9,15}$
+  name:
+    type: string
+    description: Họ tên tài xế.
+    example: Trần Minh Khoa
+    minLength: 2
+    maxLength: 100
+  password:
+    type: string
+    description: Mật khẩu tài khoản; không được ghi log.
+    format: password
+    minLength: 8
+    maxLength: 72
+  driverLicenseNumber:
+    type: string
+    description: Số giấy phép lái xe dùng để xét duyệt.
+    minLength: 4
+    maxLength: 50
+  driverLicenseDocumentReference:
+    type: string
+    description: Tham chiếu tài liệu giấy phép đã tải lên qua cơ chế lưu trữ nội bộ; định dạng lưu trữ TBD.
+    minLength: 1
+    maxLength: 255
+  vehicle:
+    type: object
+    description: Phương tiện đề nghị đăng ký.
+    properties:
+      licensePlate:
+        type: string
+        minLength: 5
+        maxLength: 20
+        pattern: ^[A-Za-z0-9.-]{5,20}$
+      vehicleType:
+        type: string
+        enum: [MOTORCYCLE, CAR_4]
+      registrationDocumentReference:
+        type: string
+        description: Tham chiếu giấy đăng ký phương tiện; định dạng lưu trữ TBD.
+        minLength: 1
+        maxLength: 255
+    required: [licensePlate, vehicleType, registrationDocumentReference]
+required: [phone, name, password, driverLicenseNumber, driverLicenseDocumentReference, vehicle]
+

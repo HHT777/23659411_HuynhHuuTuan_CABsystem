@@ -1,5 +1,7 @@
 type: object
-description: Các trường hồ sơ khách hàng được phép cập nhật.
+description: Các trường tài khoản chung mà Khách hàng hoặc Tài xế được phép cập nhật trực tiếp.
+minProperties: 1
+additionalProperties: false
 properties:
   name:
     type: string

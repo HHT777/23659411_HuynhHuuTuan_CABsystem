@@ -1,0 +1,27 @@
+type: object
+description: Sự kiện SSE cho giao diện đang hoạt động; API đọc trạng thái vẫn là nguồn sự thật sau khi kết nối lại.
+properties:
+  eventId:
+    type: string
+    description: ID dùng với Last-Event-ID để nối lại luồng.
+    minLength: 1
+    maxLength: 100
+  eventType:
+    type: string
+    enum: [RIDE_REQUEST_UPDATED, RIDE_OFFER_CREATED, RIDE_OFFER_EXPIRED, DRIVER_ASSIGNED, TRIP_UPDATED, NOTIFICATION_CREATED]
+  resourceType:
+    type: string
+    enum: [RIDE_REQUEST, RIDE_OFFER, TRIP, NOTIFICATION]
+  resourceId:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  occurredAt:
+    type: string
+    format: date-time
+  status:
+    type: string
+    description: Trạng thái mới nếu sự kiện gắn với chuyển trạng thái.
+    nullable: true
+required: [eventId, eventType, resourceType, resourceId, occurredAt]
+

@@ -1,9 +1,9 @@
 /api/v1/ride-requests:
   post:
     tags:
-    - Ride Requests
+    - 02 - Khách hàng (CUSTOMER)
     operationId: createRideRequest
-    summary: Tạo yêu cầu chuyến
+    summary: Khách hàng tạo yêu cầu đặt xe
     description: Ghi nhận điểm đón, điểm đến, loại xe và bắt đầu ghép tài xế nội bộ.
     x-srs-ref: UC-05; FR-07..FR-09; BRULE-03; RULE-02
     x-roles:
@@ -51,9 +51,9 @@
 /api/v1/ride-requests/{id}:
   get:
     tags:
-    - Ride Requests
+    - 02 - Khách hàng (CUSTOMER)
     operationId: getRideRequest
-    summary: Xem yêu cầu chuyến
+    summary: Khách hàng xem yêu cầu đặt xe
     description: Chỉ khách hàng sở hữu được xem yêu cầu chuyến.
     x-srs-ref: UC-05; FR-08; BRULE-03
     x-roles:
@@ -75,3 +75,44 @@
         $ref: ../components/responses/InternalServerError.yaml
     parameters:
     - $ref: ../components/parameters/ResourceId.yaml
+
+/api/v1/ride-requests/{id}/cancellation:
+  post:
+    tags:
+    - 02 - Khách hàng (CUSTOMER)
+    operationId: cancelRideRequest
+    summary: Khách hàng hủy yêu cầu đang tìm tài xế
+    description: |-
+      Chỉ chủ sở hữu được hủy khi trạng thái còn SEARCHING. Hủy thành công chuyển yêu cầu sang CANCELLED và dừng matching.
+      Nếu thao tác hủy và nhận chuyến đồng thời, thao tác được server commit thành công trước có hiệu lực. Trả 409 nếu
+      yêu cầu đã ASSIGNED, CANCELLED hoặc kết thúc; khi đã tạo Trip, Khách hàng phải dùng luồng hủy Trip.
+    x-srs-ref: UC-05; FR-08; FR-14..FR-16; BRULE-03..BRULE-06; RULE-02
+    x-roles:
+    - CUSTOMER
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    - $ref: ../components/parameters/IdempotencyKey.yaml
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/RideRequestCancellationRequest.yaml
+    responses:
+      '200':
+        description: Yêu cầu đã chuyển sang CANCELLED và matching đã dừng.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/RideRequestResponse.yaml
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '404': {$ref: ../components/responses/NotFound.yaml}
+      '409':
+        description: Trạng thái đã thay đổi nên không còn được hủy dưới dạng RideRequest.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/ErrorResponse.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}

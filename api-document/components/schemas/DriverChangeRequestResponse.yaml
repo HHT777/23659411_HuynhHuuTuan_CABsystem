@@ -1,0 +1,30 @@
+type: object
+description: Yêu cầu thay đổi hồ sơ nghiệp vụ của tài xế.
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  driverId:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  changeType:
+    type: string
+    enum: [DRIVER_DOCUMENT, VEHICLE]
+  status:
+    type: string
+    enum: [PENDING_REVIEW, APPROVED, REJECTED]
+  submittedAt:
+    type: string
+    format: date-time
+  reviewedAt:
+    type: string
+    format: date-time
+    nullable: true
+  reviewNote:
+    type: string
+    maxLength: 500
+    nullable: true
+required: [id, driverId, changeType, status, submittedAt]
+

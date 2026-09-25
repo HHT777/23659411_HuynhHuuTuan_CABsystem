@@ -1,7 +1,11 @@
 /api/v1/me/profile:
   get:
     tags:
-    - Authentication and Accounts
+    - 02 - Khách hàng (CUSTOMER)
+    - 03 - Tài xế (DRIVER)
+    - 04 - Nhân viên vận hành (OPERATOR)
+    - 05 - Ban lãnh đạo (EXECUTIVE)
+    - 06 - Quản trị viên (ADMIN)
     operationId: getMyProfile
     summary: Xem hồ sơ của tôi
     description: Trả hồ sơ thuộc tài khoản đang xác thực.
@@ -21,19 +25,23 @@
               $ref: ../components/schemas/UserResponse.yaml
       '401':
         $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
       '404':
         $ref: ../components/responses/NotFound.yaml
       '500':
         $ref: ../components/responses/InternalServerError.yaml
   patch:
     tags:
-    - Authentication and Accounts
+    - 02 - Khách hàng (CUSTOMER)
+    - 03 - Tài xế (DRIVER)
     operationId: updateMyProfile
     summary: Cập nhật hồ sơ của tôi
-    description: Cập nhật tên hoặc số điện thoại; số điện thoại phải duy nhất.
-    x-srs-ref: UC-03; FR-05; BRULE-01
+    description: Cập nhật tên hoặc số điện thoại tài khoản chung; số điện thoại phải duy nhất. Hồ sơ nghiệp vụ tài xế dùng API Driver riêng.
+    x-srs-ref: UC-03; FR-05; FR-06; BRULE-01
     x-roles:
     - CUSTOMER
+    - DRIVER
     responses:
       '200':
         description: Thành công.
@@ -66,7 +74,7 @@
 /api/v1/me/trips:
   get:
     tags:
-    - Trip History and Ratings
+    - 02 - Khách hàng (CUSTOMER)
     operationId: listMyTrips
     summary: Lịch sử chuyến của tôi
     description: Trả lịch sử chuyến có phân trang và lọc thời gian; from bao gồm, to không bao gồm, tối đa 366 ngày.

@@ -1,10 +1,10 @@
 /api/v1/admin/roles/{id}:
   patch:
     tags:
-    - Operations and Incident Support
+    - 06 - Quản trị viên (ADMIN)
     operationId: updateAdministrativeRole
     summary: Cập nhật vai trò quản trị
-    description: Quản trị viên cấp hoặc thu hồi vai trò vận hành/báo cáo; thao tác được audit.
+    description: Quản trị viên thay thế toàn bộ danh sách role OPERATOR/EXECUTIVE của tài khoản đích; danh sách rỗng là thu hồi. Không được gán ADMIN, CUSTOMER hoặc DRIVER qua API này; thao tác được audit.
     x-srs-ref: UC-16; FR-31; FR-35; BRULE-12..BRULE-14
     x-roles:
     - ADMIN
@@ -39,11 +39,11 @@
           schema:
             $ref: ../components/schemas/RoleUpdateRequest.yaml
           example:
-            role: OPERATOR
+            roles: [OPERATOR]
 /api/v1/admin/fares:
   post:
     tags:
-    - Operations and Incident Support
+    - 06 - Quản trị viên (ADMIN)
     operationId: createFareTable
     summary: Tạo bảng giá
     description: Quản trị viên tạo phiên bản bảng giá; phiên bản được lưu cùng yêu cầu chuyến và thao tác được audit.

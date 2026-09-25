@@ -1,10 +1,10 @@
 /api/v1/drivers/me/availability:
   patch:
     tags:
-    - Driver Profiles and Availability
+    - 03 - Tài xế (DRIVER)
     operationId: updateMyDriverAvailability
-    summary: Cập nhật trạng thái nhận chuyến
-    description: Tài xế chỉ ONLINE khi hồ sơ và xe hoạt động, đồng thời không có chuyến mở.
+    summary: Tài xế cập nhật trạng thái nhận chuyến
+    description: Tài xế chỉ ONLINE khi đăng ký đã APPROVED, tài khoản/hồ sơ/xe đang hoạt động và không có chuyến mở.
     x-srs-ref: UC-04; FR-02; FR-06; BRULE-02
     x-roles:
     - DRIVER
@@ -39,9 +39,9 @@
 /api/v1/drivers/me/offers:
   get:
     tags:
-    - Driver Matching and Dispatch
+    - 03 - Tài xế (DRIVER)
     operationId: listMyRideOffers
-    summary: Danh sách đề nghị chuyến
+    summary: Tài xế xem danh sách lời mời chuyến
     description: Trả các đề nghị dành cho tài xế; mỗi đề nghị có cửa sổ phản hồi 20 giây.
     x-srs-ref: UC-07; FR-12..FR-14; BRULE-04..BRULE-06
     x-roles:
@@ -67,9 +67,9 @@
 /api/v1/drivers/me/location:
   put:
     tags:
-    - Trips and Tracking
+    - 03 - Tài xế (DRIVER)
     operationId: updateMyDriverLocation
-    summary: Cập nhật vị trí tài xế
+    summary: Tài xế cập nhật vị trí
     description: Ghi nhận vị trí WGS84 mới nhất; khi online hoặc đang chạy chuyến, tối đa 10 giây mỗi lần cập nhật.
     x-srs-ref: UC-08; FR-21; BRULE-04; BRULE-07
     x-roles:

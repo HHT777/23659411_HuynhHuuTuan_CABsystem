@@ -1,10 +1,10 @@
 /api/v1/payments/provider-callbacks:
   post:
     tags:
-    - Fare and Payments
+    - 01 - Công khai và Tích hợp
     operationId: receivePaymentProviderCallback
-    summary: Nhận callback thanh toán
-    description: Nhận callback idempotent từ nhà cung cấp sandbox; chỉ kết quả đã xác minh mới được ghi nhận.
+    summary: Sandbox gửi callback thanh toán
+    description: Nhận callback idempotent từ mock/sandbox; callback provider thật, chữ ký, retry và timeout là TBD. Chỉ kết quả đã xác minh mới được ghi nhận.
     x-srs-ref: UC-12; FR-25..FR-27; BRULE-10
     x-roles:
     - PAYMENT_PROVIDER
@@ -47,9 +47,9 @@
 /api/v1/payments/{id}/cash-confirmation:
   post:
     tags:
-    - Fare and Payments
+    - 03 - Tài xế (DRIVER)
     operationId: confirmCashPayment
-    summary: Xác nhận thu tiền mặt
+    summary: Tài xế xác nhận thu tiền mặt
     description: Tài xế xác nhận đã nhận tiền mặt; vận hành có thể tra soát tranh chấp qua audit.
     x-srs-ref: UC-12; FR-24; FR-26; BRULE-10
     x-roles:

@@ -1,9 +1,10 @@
 /api/v1/operations/drivers:
   get:
     tags:
-    - Operations and Incident Support
+    - 04 - Nhân viên vận hành (OPERATOR)
+    - 06 - Quản trị viên (ADMIN)
     operationId: listDriversForOperations
-    summary: Danh sách tài xế vận hành
+    summary: Vận hành tra cứu Tài xế
     description: Vận hành tra cứu trạng thái hồ sơ, phương tiện và khả dụng của tài xế.
     x-srs-ref: UC-16; FR-31..FR-33; BRULE-12; BRULE-13
     x-roles:
@@ -30,9 +31,10 @@
 /api/v1/operations/drivers/{id}:
   patch:
     tags:
-    - Operations and Incident Support
+    - 04 - Nhân viên vận hành (OPERATOR)
+    - 06 - Quản trị viên (ADMIN)
     operationId: updateDriverForOperations
-    summary: Cập nhật trạng thái tài xế
+    summary: Vận hành cập nhật trạng thái tài khoản Tài xế
     description: Vận hành khóa hoặc kích hoạt hồ sơ tài xế theo quyền; thay đổi được audit.
     x-srs-ref: UC-16; FR-31..FR-35; BRULE-12..BRULE-14
     x-roles:
@@ -73,9 +75,10 @@
 /api/v1/operations/incidents:
   get:
     tags:
-    - Operations and Incident Support
+    - 04 - Nhân viên vận hành (OPERATOR)
+    - 06 - Quản trị viên (ADMIN)
     operationId: listIncidentsForOperations
-    summary: Danh sách sự cố
+    summary: Vận hành tra cứu sự cố
     description: Vận hành xem hàng đợi sự cố để hỗ trợ và xử lý.
     x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
     x-roles:
@@ -102,9 +105,10 @@
 /api/v1/operations/incidents/{id}:
   patch:
     tags:
-    - Operations and Incident Support
+    - 04 - Nhân viên vận hành (OPERATOR)
+    - 06 - Quản trị viên (ADMIN)
     operationId: updateIncidentForOperations
-    summary: Xử lý sự cố
+    summary: Vận hành xử lý sự cố
     description: Cập nhật trạng thái và kết quả xử lý; thao tác phải được audit.
     x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
     x-roles:
@@ -143,3 +147,120 @@
           example:
             status: RESOLVED
             resolution: Đã xác minh và hỗ trợ hai bên.
+
+/api/v1/operations/customers:
+  get:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: listCustomersForOperations
+    summary: Vận hành tra cứu Khách hàng
+    description: Chỉ trả dữ liệu cần cho nhiệm vụ hỗ trợ; không cấp quyền sửa hoặc xóa Khách hàng.
+    x-srs-ref: UC-16; FR-31; FR-32; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/Page.yaml}
+      - {$ref: ../components/parameters/Size.yaml}
+    responses:
+      '200':
+        description: Danh sách Khách hàng.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: ../components/schemas/PaginatedResponse.yaml}
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: {$ref: ../components/schemas/UserResponse.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/vehicles:
+  get:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: listVehiclesForOperations
+    summary: Vận hành tra cứu phương tiện
+    description: Tra cứu phương tiện phục vụ xét duyệt và hỗ trợ; cập nhật phải đi qua quy trình duyệt thay đổi.
+    x-srs-ref: UC-16; FR-31; FR-32; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/Page.yaml}
+      - {$ref: ../components/parameters/Size.yaml}
+    responses:
+      '200':
+        description: Danh sách phương tiện.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: ../components/schemas/PaginatedResponse.yaml}
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: {$ref: ../components/schemas/VehicleResponse.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/trips:
+  get:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: listTripsForOperations
+    summary: Vận hành tra cứu chuyến đi
+    description: Tra cứu chuyến đang diễn ra hoặc lịch sử để hỗ trợ; không sửa trạng thái qua endpoint này.
+    x-srs-ref: UC-16; FR-31..FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/Page.yaml}
+      - {$ref: ../components/parameters/Size.yaml}
+      - {$ref: ../components/parameters/From.yaml}
+      - {$ref: ../components/parameters/To.yaml}
+    responses:
+      '200':
+        description: Danh sách chuyến.
+        content:
+          application/json:
+            schema: {$ref: ../components/schemas/PaginatedTripResponse.yaml}
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}
+
+/api/v1/operations/transactions:
+  get:
+    tags: [04 - Nhân viên vận hành (OPERATOR), 06 - Quản trị viên (ADMIN)]
+    operationId: listTransactionsForOperations
+    summary: Vận hành tra cứu lịch sử giao dịch
+    description: Chỉ đọc trạng thái giao dịch phục vụ hỗ trợ; OPERATOR và ADMIN không được sửa kết quả thanh toán tại endpoint này.
+    x-srs-ref: UC-16; UC-17; FR-31; FR-34; FR-35; BRULE-12..BRULE-14
+    x-roles: [OPERATOR, ADMIN]
+    parameters:
+      - {$ref: ../components/parameters/Page.yaml}
+      - {$ref: ../components/parameters/Size.yaml}
+      - {$ref: ../components/parameters/From.yaml}
+      - {$ref: ../components/parameters/To.yaml}
+    responses:
+      '200':
+        description: Danh sách giao dịch không chứa dữ liệu thanh toán nhạy cảm.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: ../components/schemas/PaginatedResponse.yaml}
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: {$ref: ../components/schemas/PaymentResponse.yaml}
+      '400': {$ref: ../components/responses/BadRequest.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '422': {$ref: ../components/responses/UnprocessableEntity.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}

@@ -2,7 +2,11 @@ openapi: 3.0.3
 info:
   title: CAB System API
   version: 1.0.0
-  description: Đặc tả API pilot được truy vết từ SRS.md, mục 18.9 và các quy tắc nghiệp vụ liên quan.
+  description: |-
+    Đặc tả API pilot được truy vết từ SRS.md, mục 18.9 và các quy tắc nghiệp vụ liên quan.
+    Trên Swagger UI, operation được nhóm theo actor. Đăng nhập bằng `/api/v1/auth/login`, sao chép `accessToken`,
+    chọn **Authorize** và nhập `Bearer <accessToken>`. Tag chỉ hỗ trợ điều hướng; `security`, `x-roles`, quyền sở hữu
+    và phản hồi 401/403 mới mô tả quyền thực thi.
   license:
     name: Proprietary
     url: https://cab-system.invalid/license
@@ -12,26 +16,18 @@ servers:
 - url: /
   description: Cùng origin với trang tài liệu hoặc API gateway
 tags:
-- name: Authentication and Accounts
-  description: Đăng ký, xác thực và hồ sơ tài khoản.
-- name: Driver Profiles and Availability
-  description: Hồ sơ và trạng thái sẵn sàng của tài xế.
-- name: Ride Requests
-  description: Tiếp nhận và tra cứu yêu cầu chuyến.
-- name: Driver Matching and Dispatch
-  description: Đề nghị chuyến và phản hồi của tài xế; thuật toán ghép chạy nội bộ.
-- name: Trips and Tracking
-  description: Vòng đời chuyến và theo dõi vị trí.
-- name: Fare and Payments
-  description: Cước chuyến và thanh toán.
-- name: Notifications
-  description: Thông báo in-app.
-- name: Trip History and Ratings
-  description: Lịch sử chuyến và đánh giá tài xế.
-- name: Operations and Incident Support
-  description: Quản lý vận hành, phân quyền, bảng giá và sự cố.
-- name: Reporting
-  description: Báo cáo vận hành tổng hợp.
+- name: 01 - Công khai và Tích hợp
+  description: Đăng ký, đăng nhập và callback sandbox; các operation công khai không dùng bearer token.
+- name: 02 - Khách hàng (CUSTOMER)
+  description: API dành cho Khách hàng; dữ liệu chuyến, yêu cầu và thông báo bị giới hạn theo quyền sở hữu.
+- name: 03 - Tài xế (DRIVER)
+  description: API dành cho Tài xế; chỉ thao tác hồ sơ của mình, lời mời và chuyến được phân công.
+- name: 04 - Nhân viên vận hành (OPERATOR)
+  description: Tra cứu và xử lý tác vụ vận hành theo quyền; không xóa dữ liệu hoặc sửa kết quả thanh toán.
+- name: 05 - Ban lãnh đạo (EXECUTIVE)
+  description: Chỉ xem báo cáo được cấp quyền; không có quyền cấu hình hoặc quản trị hệ thống.
+- name: 06 - Quản trị viên (ADMIN)
+  description: Quản lý vai trò, bảng giá và tác vụ quản trị nhạy cảm; các thay đổi được audit.
 security:
 - bearerAuth: []
 paths:
@@ -43,6 +39,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1v1~1auth~1refresh
   /api/v1/auth/logout:
     $ref: ./paths/auth.yaml#/~1api~1v1~1auth~1logout
+  /api/v1/auth/driver-registrations:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1auth~1driver-registrations
   /api/v1/me/profile:
     $ref: ./paths/accounts.yaml#/~1api~1v1~1me~1profile
   /api/v1/me/trips:
@@ -53,10 +51,18 @@ paths:
     $ref: ./paths/drivers.yaml#/~1api~1v1~1drivers~1me~1offers
   /api/v1/drivers/me/location:
     $ref: ./paths/drivers.yaml#/~1api~1v1~1drivers~1me~1location
+  /api/v1/drivers/me/profile:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1drivers~1me~1profile
+  /api/v1/drivers/me/vehicle:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1drivers~1me~1vehicle
+  /api/v1/drivers/me/change-requests:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1drivers~1me~1change-requests
   /api/v1/ride-requests:
     $ref: ./paths/ride-requests.yaml#/~1api~1v1~1ride-requests
   /api/v1/ride-requests/{id}:
     $ref: ./paths/ride-requests.yaml#/~1api~1v1~1ride-requests~1{id}
+  /api/v1/ride-requests/{id}/cancellation:
+    $ref: ./paths/ride-requests.yaml#/~1api~1v1~1ride-requests~1{id}~1cancellation
   /api/v1/ride-offers/{id}/responses:
     $ref: ./paths/ride-offers.yaml#/~1api~1v1~1ride-offers~1{id}~1responses
   /api/v1/trips/{id}:
@@ -81,10 +87,28 @@ paths:
     $ref: ./paths/notifications.yaml#/~1api~1v1~1notifications
   /api/v1/notifications/{id}:
     $ref: ./paths/notifications.yaml#/~1api~1v1~1notifications~1{id}
+  /api/v1/me/events:
+    $ref: ./paths/realtime.yaml#/~1api~1v1~1me~1events
   /api/v1/operations/drivers:
     $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1drivers
   /api/v1/operations/drivers/{id}:
     $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1drivers~1{id}
+  /api/v1/operations/driver-applications:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1operations~1driver-applications
+  /api/v1/operations/driver-applications/{id}:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1operations~1driver-applications~1{id}
+  /api/v1/operations/driver-change-requests:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1operations~1driver-change-requests
+  /api/v1/operations/driver-change-requests/{id}:
+    $ref: ./paths/driver-onboarding.yaml#/~1api~1v1~1operations~1driver-change-requests~1{id}
+  /api/v1/operations/customers:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1customers
+  /api/v1/operations/vehicles:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1vehicles
+  /api/v1/operations/trips:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1trips
+  /api/v1/operations/transactions:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1transactions
   /api/v1/operations/incidents:
     $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1incidents
   /api/v1/operations/incidents/{id}:
@@ -109,6 +133,22 @@ components:
       $ref: ./components/schemas/Coordinate.yaml
     UserCreateRequest:
       $ref: ./components/schemas/UserCreateRequest.yaml
+    DriverRegistrationRequest:
+      $ref: ./components/schemas/DriverRegistrationRequest.yaml
+    DriverApplicationResponse:
+      $ref: ./components/schemas/DriverApplicationResponse.yaml
+    DriverProfileUpdateRequest:
+      $ref: ./components/schemas/DriverProfileUpdateRequest.yaml
+    DriverChangeRequestCreate:
+      $ref: ./components/schemas/DriverChangeRequestCreate.yaml
+    DriverChangeRequestResponse:
+      $ref: ./components/schemas/DriverChangeRequestResponse.yaml
+    ReviewDecisionRequest:
+      $ref: ./components/schemas/ReviewDecisionRequest.yaml
+    RideRequestCancellationRequest:
+      $ref: ./components/schemas/RideRequestCancellationRequest.yaml
+    RealtimeEvent:
+      $ref: ./components/schemas/RealtimeEvent.yaml
     LoginRequest:
       $ref: ./components/schemas/LoginRequest.yaml
     TokenRefreshRequest:

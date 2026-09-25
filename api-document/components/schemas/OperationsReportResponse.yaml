@@ -50,14 +50,6 @@ properties:
     minimum: 0
     maximum: 1
     nullable: true
-  driverEfficiency:
-    type: number
-    description: Hiệu suất tài xế; null/N/A khi mẫu số bằng 0.
-    example: 0.76
-    format: double
-    minimum: 0
-    maximum: 1
-    nullable: true
 required:
 - from
 - to

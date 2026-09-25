@@ -22,11 +22,16 @@ properties:
     pattern: ^\+?[0-9]{9,15}$
   status:
     type: string
-    description: Trạng thái hồ sơ tài xế.
+    description: Trạng thái tài khoản tài xế, tách biệt với xét duyệt đăng ký và trạng thái nhận chuyến.
     example: ACTIVE
     enum:
     - ACTIVE
     - SUSPENDED
+    - PENDING_APPROVAL
+  registrationStatus:
+    type: string
+    description: Trạng thái xét duyệt hồ sơ đăng ký hoặc thay đổi gần nhất.
+    enum: [PENDING_REVIEW, APPROVED, REJECTED]
   availability:
     type: string
     description: Trạng thái nhận chuyến.
@@ -49,5 +54,6 @@ required:
 - name
 - phone
 - status
+- registrationStatus
 - availability
 - vehicle

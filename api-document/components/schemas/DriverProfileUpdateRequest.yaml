@@ -1,0 +1,12 @@
+type: object
+description: Trường hồ sơ nghiệp vụ thông thường tài xế được cập nhật trực tiếp; không gồm giấy tờ hoặc phương tiện.
+minProperties: 1
+additionalProperties: false
+properties:
+  emergencyContact:
+    type: string
+    description: Số điện thoại liên hệ khẩn cấp.
+    minLength: 9
+    maxLength: 15
+    pattern: ^\+?[0-9]{9,15}$
+

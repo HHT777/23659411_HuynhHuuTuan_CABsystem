@@ -1,0 +1,28 @@
+/api/v1/me/events:
+  get:
+    tags: [02 - Khách hàng (CUSTOMER), 03 - Tài xế (DRIVER)]
+    operationId: streamMyRealtimeEvents
+    summary: Nhận sự kiện trạng thái theo thời gian thực
+    description: |-
+      Luồng Server-Sent Events (SSE) cho tài khoản đang xác thực. Khách hàng nhận thay đổi yêu cầu/chuyến của mình;
+      Tài xế nhận lời mời và thay đổi chuyến được phân công. Client có thể gửi `Last-Event-ID` khi kết nối lại.
+      Không bảo đảm phát lại vô hạn hoặc thời gian phản hồi cụ thể. Sau mất kết nối, client phải gọi API GET của resource
+      liên quan; trạng thái đọc từ API là nguồn sự thật.
+    x-srs-ref: UC-05..UC-10; UC-13; FR-09; FR-12; FR-15; FR-16; FR-18; FR-21; BRULE-11
+    x-roles: [CUSTOMER, DRIVER]
+    parameters:
+      - in: header
+        name: Last-Event-ID
+        required: false
+        schema: {type: string, maxLength: 100}
+        description: ID sự kiện cuối client đã xử lý.
+    responses:
+      '200':
+        description: Luồng SSE; mỗi trường data là JSON theo RealtimeEvent.
+        content:
+          text/event-stream:
+            schema: {$ref: ../components/schemas/RealtimeEvent.yaml}
+      '401': {$ref: ../components/responses/Unauthorized.yaml}
+      '403': {$ref: ../components/responses/Forbidden.yaml}
+      '429': {$ref: ../components/responses/TooManyRequests.yaml}
+      '500': {$ref: ../components/responses/InternalServerError.yaml}

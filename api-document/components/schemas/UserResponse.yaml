@@ -20,16 +20,15 @@ properties:
     example: Nguyễn Văn An
     minLength: 2
     maxLength: 100
-  role:
-    type: string
-    description: Vai trò chính.
-    example: CUSTOMER
-    enum:
-    - CUSTOMER
-    - DRIVER
-    - OPERATOR
-    - ADMIN
-    - EXECUTIVE
+  roles:
+    type: array
+    description: Các vai trò hiệu lực của tài khoản; quyền thực tế còn phụ thuộc policy và quyền sở hữu resource.
+    uniqueItems: true
+    minItems: 1
+    items:
+      type: string
+      enum: [CUSTOMER, DRIVER, OPERATOR, ADMIN, EXECUTIVE]
+    example: [CUSTOMER]
   createdAt:
     type: string
     description: Thời điểm tạo tài khoản.
@@ -39,5 +38,5 @@ required:
 - id
 - phone
 - name
-- role
+- roles
 - createdAt

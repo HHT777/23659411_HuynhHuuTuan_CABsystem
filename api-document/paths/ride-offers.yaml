@@ -1,9 +1,9 @@
 /api/v1/ride-offers/{id}/responses:
   post:
     tags:
-    - Driver Matching and Dispatch
+    - 03 - Tài xế (DRIVER)
     operationId: respondToRideOffer
-    summary: Phản hồi đề nghị chuyến
+    summary: Tài xế phản hồi lời mời chuyến
     description: Ghi nhận ACCEPT hoặc DECLINE; ghép chuyến là thao tác nguyên tử và đề nghị hết hạn trả 409.
     x-srs-ref: UC-07; FR-12..FR-15; BRULE-04..BRULE-06; RULE-02
     x-roles:

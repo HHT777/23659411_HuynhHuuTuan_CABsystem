@@ -1,0 +1,99 @@
+/api/v1/me/profile:
+  get:
+    tags:
+    - Authentication and Accounts
+    operationId: getMyProfile
+    summary: Xem hồ sơ của tôi
+    description: Trả hồ sơ thuộc tài khoản đang xác thực.
+    x-srs-ref: UC-03; FR-05; BRULE-01
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
+    - ADMIN
+    - EXECUTIVE
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/UserResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+  patch:
+    tags:
+    - Authentication and Accounts
+    operationId: updateMyProfile
+    summary: Cập nhật hồ sơ của tôi
+    description: Cập nhật tên hoặc số điện thoại; số điện thoại phải duy nhất.
+    x-srs-ref: UC-03; FR-05; BRULE-01
+    x-roles:
+    - CUSTOMER
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/UserResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ProfileUpdateRequest.yaml
+          example:
+            name: Nguyễn Văn Bình
+            phone: '+84987654321'
+/api/v1/me/trips:
+  get:
+    tags:
+    - Trip History and Ratings
+    operationId: listMyTrips
+    summary: Lịch sử chuyến của tôi
+    description: Trả lịch sử chuyến có phân trang và lọc thời gian; from bao gồm, to không bao gồm, tối đa 366 ngày.
+    x-srs-ref: UC-14; FR-28; FR-29; BRULE-07
+    x-roles:
+    - CUSTOMER
+    responses:
+      '200':
+        description: Lịch sử chuyến.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/PaginatedTripResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/Page.yaml
+    - $ref: ../components/parameters/Size.yaml
+    - $ref: ../components/parameters/From.yaml
+    - $ref: ../components/parameters/To.yaml

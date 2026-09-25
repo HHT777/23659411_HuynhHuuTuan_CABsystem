@@ -1,0 +1,11 @@
+type: object
+description: Xác nhận tài xế đã nhận tiền mặt.
+properties:
+  received:
+    type: boolean
+    description: Phải là true để xác nhận đã thu tiền.
+    example: true
+    enum:
+    - true
+required:
+- received

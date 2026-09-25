@@ -1,0 +1,11 @@
+allOf:
+- $ref: ./PaginatedResponse.yaml
+- type: object
+  description: Phản hồi phân trang của DriverResponse.
+  properties:
+    data:
+      type: array
+      description: Danh sách kết quả của trang.
+      items:
+        $ref: ./DriverResponse.yaml
+      example: []

@@ -1,0 +1,20 @@
+type: object
+description: Báo cáo sự cố từ khách hàng hoặc tài xế.
+properties:
+  reason:
+    type: string
+    description: Nhóm nguyên nhân sự cố.
+    example: ROUTE
+    enum:
+    - ROUTE
+    - DRIVER
+    - PASSENGER
+    - OTHER
+  note:
+    type: string
+    description: Mô tả bổ sung.
+    example: Tuyến đường bị chặn do thi công.
+    maxLength: 500
+    nullable: true
+required:
+- reason

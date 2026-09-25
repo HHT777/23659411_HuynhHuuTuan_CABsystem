@@ -1,0 +1,69 @@
+type: object
+description: Yêu cầu chuyến đã được ghi nhận.
+properties:
+  id:
+    type: string
+    description: Định danh yêu cầu chuyến.
+    example: 850e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  customerId:
+    type: string
+    description: Định danh khách hàng sở hữu.
+    example: 550e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  pickup:
+    type: object
+    description: Điểm đón.
+    example:
+      latitude: 10.7769
+      longitude: 106.7009
+      address: 1 Lê Duẩn, Quận 1, TP.HCM
+    allOf:
+    - $ref: ./Coordinate.yaml
+  destination:
+    type: object
+    description: Điểm đến.
+    example:
+      latitude: 10.8022
+      longitude: 106.7145
+      address: Bình Thạnh, TP.HCM
+    allOf:
+    - $ref: ./Coordinate.yaml
+  vehicleType:
+    type: string
+    description: Loại xe yêu cầu.
+    example: MOTORCYCLE
+    enum:
+    - MOTORCYCLE
+    - CAR_4
+  status:
+    type: string
+    description: Trạng thái yêu cầu.
+    example: SEARCHING
+    enum:
+    - SEARCHING
+    - ASSIGNED
+    - NO_DRIVER_FOUND
+    - CANCELLED
+  fareTableVersion:
+    type: string
+    description: Phiên bản bảng giá được chốt khi tạo yêu cầu.
+    example: fare-2026-01
+    minLength: 1
+    maxLength: 50
+  createdAt:
+    type: string
+    description: Thời điểm tạo yêu cầu.
+    example: '2026-09-24T10:05:00+07:00'
+    format: date-time
+required:
+- id
+- customerId
+- pickup
+- destination
+- vehicleType
+- status
+- fareTableVersion
+- createdAt

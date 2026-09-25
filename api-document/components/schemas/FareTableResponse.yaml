@@ -1,0 +1,53 @@
+type: object
+description: Bảng giá đã được cấu hình.
+properties:
+  id:
+    type: string
+    description: Định danh bảng giá.
+    example: f50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  version:
+    type: string
+    description: Phiên bản bảng giá.
+    example: fare-2026-02
+    minLength: 1
+    maxLength: 50
+  vehicleType:
+    type: string
+    description: Loại xe áp dụng.
+    example: MOTORCYCLE
+    enum:
+    - MOTORCYCLE
+    - CAR_4
+  openingFare:
+    type: number
+    description: Giá mở cửa bằng VND.
+    example: 10000
+    format: double
+    minimum: 0
+  includedKm:
+    type: number
+    description: Số km đã gồm trong giá mở cửa.
+    example: 2
+    format: double
+    minimum: 0
+  perKmFare:
+    type: number
+    description: Đơn giá mỗi km tiếp theo.
+    example: 4000
+    format: double
+    minimum: 0
+  effectiveFrom:
+    type: string
+    description: Thời điểm có hiệu lực.
+    example: '2026-10-01T00:00:00+07:00'
+    format: date-time
+required:
+- id
+- version
+- vehicleType
+- openingFare
+- includedKm
+- perKmFare
+- effectiveFrom

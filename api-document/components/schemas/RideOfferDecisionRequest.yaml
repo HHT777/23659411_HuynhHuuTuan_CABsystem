@@ -1,0 +1,12 @@
+type: object
+description: Quyết định của tài xế với đề nghị chuyến.
+properties:
+  decision:
+    type: string
+    description: Chấp nhận hoặc từ chối đề nghị.
+    example: ACCEPT
+    enum:
+    - ACCEPT
+    - DECLINE
+required:
+- decision

@@ -1,0 +1,68 @@
+type: object
+description: Chỉ số vận hành tổng hợp theo múi giờ Asia/Ho_Chi_Minh.
+properties:
+  from:
+    type: string
+    description: Mốc bắt đầu, bao gồm.
+    example: '2026-09-01T00:00:00+07:00'
+    format: date-time
+  to:
+    type: string
+    description: Mốc kết thúc, không bao gồm.
+    example: '2026-10-01T00:00:00+07:00'
+    format: date-time
+  groupBy:
+    type: string
+    description: Đơn vị tổng hợp.
+    example: DAY
+    enum:
+    - DAY
+    - MONTH
+  totalTrips:
+    type: integer
+    description: Tổng số chuyến.
+    example: 1250
+    format: int64
+    minimum: 0
+  completedTrips:
+    type: integer
+    description: Số chuyến hoàn thành.
+    example: 1100
+    format: int64
+    minimum: 0
+  cancelledTrips:
+    type: integer
+    description: Số chuyến hủy.
+    example: 90
+    format: int64
+    minimum: 0
+  revenue:
+    type: number
+    description: Tổng doanh thu VND.
+    example: 48250000
+    format: double
+    minimum: 0
+  completionRate:
+    type: number
+    description: Tỷ lệ hoàn thành; null/N/A khi mẫu số bằng 0.
+    example: 0.88
+    format: double
+    minimum: 0
+    maximum: 1
+    nullable: true
+  driverEfficiency:
+    type: number
+    description: Hiệu suất tài xế; null/N/A khi mẫu số bằng 0.
+    example: 0.76
+    format: double
+    minimum: 0
+    maximum: 1
+    nullable: true
+required:
+- from
+- to
+- groupBy
+- totalTrips
+- completedTrips
+- cancelledTrips
+- revenue

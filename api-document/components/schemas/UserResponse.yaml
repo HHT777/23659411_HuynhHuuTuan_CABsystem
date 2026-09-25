@@ -1,0 +1,43 @@
+type: object
+description: Thông tin tài khoản trả về cho máy khách.
+properties:
+  id:
+    type: string
+    description: Định danh tài khoản.
+    example: 550e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  phone:
+    type: string
+    description: Số điện thoại tài khoản.
+    example: '+84901234567'
+    minLength: 9
+    maxLength: 15
+    pattern: ^\+?[0-9]{9,15}$
+  name:
+    type: string
+    description: Tên hiển thị.
+    example: Nguyễn Văn An
+    minLength: 2
+    maxLength: 100
+  role:
+    type: string
+    description: Vai trò chính.
+    example: CUSTOMER
+    enum:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
+    - ADMIN
+    - EXECUTIVE
+  createdAt:
+    type: string
+    description: Thời điểm tạo tài khoản.
+    example: '2026-09-24T10:00:00+07:00'
+    format: date-time
+required:
+- id
+- phone
+- name
+- role
+- createdAt

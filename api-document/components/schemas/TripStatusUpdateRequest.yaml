@@ -1,0 +1,14 @@
+type: object
+description: Trạng thái chuyến tiếp theo trong luồng hợp lệ.
+properties:
+  status:
+    type: string
+    description: Trạng thái mới.
+    example: ARRIVED_AT_PICKUP
+    enum:
+    - ARRIVED_AT_PICKUP
+    - PICKED_UP
+    - IN_PROGRESS
+    - COMPLETED
+required:
+- status

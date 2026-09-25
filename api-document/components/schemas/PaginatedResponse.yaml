@@ -1,0 +1,26 @@
+type: object
+description: Khung phản hồi phân trang dùng lại.
+properties:
+  data:
+    type: array
+    description: Danh sách dữ liệu của trang.
+    items:
+      type: object
+      description: Một phần tử kết quả.
+      example:
+        id: 550e8400-e29b-41d4-a716-446655440000
+    example:
+    - id: 550e8400-e29b-41d4-a716-446655440000
+  pagination:
+    type: object
+    description: Metadata phân trang.
+    example:
+      page: 1
+      size: 20
+      totalItems: 42
+      totalPages: 3
+    allOf:
+    - $ref: ./PaginationMeta.yaml
+required:
+- data
+- pagination

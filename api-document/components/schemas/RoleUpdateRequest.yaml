@@ -1,0 +1,12 @@
+type: object
+description: Cấp hoặc thu hồi vai trò vận hành.
+properties:
+  role:
+    type: string
+    description: Vai trò quản trị được phép cấu hình.
+    example: OPERATOR
+    enum:
+    - OPERATOR
+    - EXECUTIVE
+required:
+- role

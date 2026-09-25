@@ -1,0 +1,11 @@
+allOf:
+- $ref: ./PaginatedResponse.yaml
+- type: object
+  description: Phản hồi phân trang của IncidentResponse.
+  properties:
+    data:
+      type: array
+      description: Danh sách kết quả của trang.
+      items:
+        $ref: ./IncidentResponse.yaml
+      example: []

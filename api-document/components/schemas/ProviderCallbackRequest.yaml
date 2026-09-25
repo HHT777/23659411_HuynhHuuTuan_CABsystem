@@ -1,0 +1,33 @@
+type: object
+description: Callback từ nhà cung cấp thanh toán sandbox.
+properties:
+  providerReference:
+    type: string
+    description: Mã giao dịch phía nhà cung cấp.
+    example: sandbox_txn_123
+    minLength: 1
+    maxLength: 100
+  paymentId:
+    type: string
+    description: Định danh thanh toán nội bộ.
+    example: c50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  status:
+    type: string
+    description: Kết quả tin cậy từ nhà cung cấp.
+    example: PAID
+    enum:
+    - PAID
+    - FAILED
+    - UNKNOWN
+  occurredAt:
+    type: string
+    description: Thời điểm phát sinh kết quả.
+    example: '2026-09-24T10:38:00+07:00'
+    format: date-time
+required:
+- providerReference
+- paymentId
+- status
+- occurredAt

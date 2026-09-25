@@ -1,0 +1,74 @@
+type: object
+description: Thông tin chuyến đi.
+properties:
+  id:
+    type: string
+    description: Định danh chuyến.
+    example: a50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  rideRequestId:
+    type: string
+    description: Định danh yêu cầu gốc.
+    example: 850e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  customerId:
+    type: string
+    description: Định danh khách hàng.
+    example: 550e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  driverId:
+    type: string
+    description: Định danh tài xế.
+    example: 750e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  status:
+    type: string
+    description: Trạng thái chuyến.
+    example: IN_PROGRESS
+    enum:
+    - ASSIGNED
+    - ARRIVED_AT_PICKUP
+    - PICKED_UP
+    - IN_PROGRESS
+    - COMPLETED
+    - CANCELLED
+  driverLocation:
+    type: object
+    description: Vị trí mới nhất của tài xế.
+    example:
+      driverId: 750e8400-e29b-41d4-a716-446655440000
+      latitude: 10.7769
+      longitude: 106.7009
+      updatedAt: '2026-09-24T10:06:00+07:00'
+    allOf:
+    - $ref: ./DriverLocationResponse.yaml
+  etaMinutes:
+    type: integer
+    description: ETA theo phút; null khi không có dữ liệu định tuyến.
+    example: 8
+    format: int32
+    minimum: 0
+    maximum: 1440
+    nullable: true
+  createdAt:
+    type: string
+    description: Thời điểm tạo chuyến.
+    example: '2026-09-24T10:06:10+07:00'
+    format: date-time
+  completedAt:
+    type: string
+    description: Thời điểm hoàn thành, null nếu chưa hoàn thành.
+    example: '2026-09-24T10:36:10+07:00'
+    nullable: true
+    format: date-time
+required:
+- id
+- rideRequestId
+- customerId
+- driverId
+- status
+- createdAt

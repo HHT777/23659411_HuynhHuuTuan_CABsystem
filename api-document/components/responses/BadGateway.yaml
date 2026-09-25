@@ -1,0 +1,10 @@
+description: Dịch vụ phụ thuộc trả lỗi hoặc không sẵn sàng.
+content:
+  application/json:
+    schema:
+      $ref: ../schemas/ErrorResponse.yaml
+    example:
+      code: DEPENDENCY_ERROR
+      message: Không thể kết nối dịch vụ phụ thuộc.
+      details: []
+      requestId: req_01J8QH8Y7W

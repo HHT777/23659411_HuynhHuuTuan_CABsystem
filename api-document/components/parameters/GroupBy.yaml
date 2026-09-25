@@ -1,0 +1,10 @@
+name: groupBy
+in: query
+required: true
+description: Đơn vị tổng hợp báo cáo.
+schema:
+  type: string
+  enum:
+  - DAY
+  - MONTH
+  example: DAY

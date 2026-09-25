@@ -1,0 +1,33 @@
+type: object
+description: Cặp token xác thực; refresh token được xoay vòng khi làm mới.
+properties:
+  accessToken:
+    type: string
+    description: JWT access token có hiệu lực 30 phút.
+    example: eyJhbGciOiJIUzI1NiJ9.access
+    minLength: 20
+    maxLength: 4096
+  refreshToken:
+    type: string
+    description: Refresh token có hiệu lực 7 ngày.
+    example: eyJhbGciOiJIUzI1NiJ9.refresh
+    minLength: 20
+    maxLength: 4096
+  tokenType:
+    type: string
+    description: Loại token dùng ở Authorization header.
+    example: Bearer
+    enum:
+    - Bearer
+  expiresIn:
+    type: integer
+    description: Thời hạn access token tính bằng giây.
+    example: 1800
+    format: int32
+    minimum: 1
+    maximum: 1800
+required:
+- accessToken
+- refreshToken
+- tokenType
+- expiresIn

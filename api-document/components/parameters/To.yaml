@@ -1,0 +1,8 @@
+name: to
+in: query
+required: false
+description: Thời điểm kết thúc (không bao gồm); khoảng truy vấn tối đa 366 ngày.
+schema:
+  type: string
+  format: date-time
+  example: '2026-10-01T00:00:00+07:00'

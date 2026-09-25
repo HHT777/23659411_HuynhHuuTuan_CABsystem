@@ -1,174 +1,105 @@
-/drivers:
+/api/v1/drivers/me/availability:
+  patch:
+    tags:
+    - Driver Profiles and Availability
+    operationId: updateMyDriverAvailability
+    summary: Cập nhật trạng thái nhận chuyến
+    description: Tài xế chỉ ONLINE khi hồ sơ và xe hoạt động, đồng thời không có chuyến mở.
+    x-srs-ref: UC-04; FR-02; FR-06; BRULE-02
+    x-roles:
+    - DRIVER
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/DriverResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/DriverAvailabilityRequest.yaml
+          example:
+            availability: ONLINE
+/api/v1/drivers/me/offers:
   get:
     tags:
-      - Drivers
-    summary: "Lấy danh sách tài xế (quản lý vận hành - UC-16)"
-    operationId: listDrivers
-    security:
-      - bearerAuth: []
+    - Driver Matching and Dispatch
+    operationId: listMyRideOffers
+    summary: Danh sách đề nghị chuyến
+    description: Trả các đề nghị dành cho tài xế; mỗi đề nghị có cửa sổ phản hồi 20 giây.
+    x-srs-ref: UC-07; FR-12..FR-14; BRULE-04..BRULE-06
+    x-roles:
+    - DRIVER
     responses:
-      "200":
-        description: "Danh sách tài xế."
+      '200':
+        description: Danh sách đề nghị.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: "../openapi.yaml#/components/schemas/Driver"
-      "401":
-        description: "Chưa xác thực."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/drivers/{driverId}:
-  get:
-    tags:
-      - Drivers
-    summary: "Lấy hồ sơ tài xế theo ID"
-    operationId: getDriver
-    security:
-      - bearerAuth: []
+              $ref: ../components/schemas/PaginatedRideOfferResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
     parameters:
-      - name: driverId
-        in: path
-        required: true
-        description: "Mã tài xế."
-        schema:
-          type: string
-    responses:
-      "200":
-        description: "Hồ sơ tài xế."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Driver"
-      "404":
-        description: "Không tìm thấy tài xế."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/drivers/{driverId}/profile:
+    - $ref: ../components/parameters/Page.yaml
+    - $ref: ../components/parameters/Size.yaml
+/api/v1/drivers/me/location:
   put:
     tags:
-      - Drivers
-    summary: "Cập nhật hồ sơ tài xế và thông tin phương tiện (UC-03)"
-    operationId: updateDriverProfile
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: driverId
-        in: path
-        required: true
-        description: "Mã tài xế."
-        schema:
-          type: string
+    - Trips and Tracking
+    operationId: updateMyDriverLocation
+    summary: Cập nhật vị trí tài xế
+    description: Ghi nhận vị trí WGS84 mới nhất; khi online hoặc đang chạy chuyến, tối đa 10 giây mỗi lần cập nhật.
+    x-srs-ref: UC-08; FR-21; BRULE-04; BRULE-07
+    x-roles:
+    - DRIVER
+    responses:
+      '200':
+        description: Vị trí đã cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/DriverLocationResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
     requestBody:
       required: true
+      description: Dữ liệu yêu cầu.
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              driver:
-                $ref: "../openapi.yaml#/components/schemas/Driver"
-              vehicle:
-                $ref: "../openapi.yaml#/components/schemas/Vehicle"
-    responses:
-      "200":
-        description: "Hồ sơ tài xế được cập nhật."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Driver"
-      "401":
-        $ref: "../openapi.yaml#/components/responses/Unauthorized"
-      "403":
-        description: "Người dùng không có quyền cập nhật hồ sơ này."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-      "404":
-        $ref: "../openapi.yaml#/components/responses/NotFound"
-
-/drivers/{driverId}/status:
-  put:
-    tags:
-      - Drivers
-    summary: "Cập nhật trạng thái sẵn sàng (UC-04)"
-    operationId: updateDriverStatus
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: driverId
-        in: path
-        required: true
-        description: "Mã tài xế."
-        schema:
-          type: string
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required:
-              - status
-            properties:
-              status:
-                type: string
-                enum:
-                  - SAN_SANG
-                  - KHONG_SAN_SANG
-    responses:
-      "200":
-        description: "Trạng thái được cập nhật."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Driver"
-      "404":
-        description: "Không tìm thấy tài xế."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/drivers/{driverId}/location:
-  put:
-    tags:
-      - Drivers
-    summary: "Cập nhật vị trí tài xế (UC-08)"
-    operationId: updateDriverLocation
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: driverId
-        in: path
-        required: true
-        description: "Mã tài xế."
-        schema:
-          type: string
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/DriverLocation"
-    responses:
-      "200":
-        description: "Vị trí được cập nhật."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/DriverLocation"
-      "404":
-        description: "Không tìm thấy tài xế."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
+            $ref: ../components/schemas/DriverLocationRequest.yaml
+          example:
+            latitude: 10.7769
+            longitude: 106.7009

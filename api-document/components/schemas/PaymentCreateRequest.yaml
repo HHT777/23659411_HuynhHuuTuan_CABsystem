@@ -1,0 +1,12 @@
+type: object
+description: Phương thức thanh toán cho chuyến đã hoàn thành.
+properties:
+  method:
+    type: string
+    description: Phương thức thanh toán.
+    example: ELECTRONIC
+    enum:
+    - CASH
+    - ELECTRONIC
+required:
+- method

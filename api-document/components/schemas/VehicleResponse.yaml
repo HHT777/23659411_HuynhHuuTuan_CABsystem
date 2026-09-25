@@ -1,0 +1,35 @@
+type: object
+description: Thông tin phương tiện.
+properties:
+  id:
+    type: string
+    description: Định danh phương tiện.
+    example: 650e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  licensePlate:
+    type: string
+    description: Biển số xe.
+    example: 59A1-123.45
+    minLength: 5
+    maxLength: 20
+    pattern: ^[A-Za-z0-9.-]{5,20}$
+  vehicleType:
+    type: string
+    description: Loại phương tiện trong pilot.
+    example: MOTORCYCLE
+    enum:
+    - MOTORCYCLE
+    - CAR_4
+  status:
+    type: string
+    description: Trạng thái vận hành của xe.
+    example: ACTIVE
+    enum:
+    - ACTIVE
+    - INACTIVE
+required:
+- id
+- licensePlate
+- vehicleType
+- status

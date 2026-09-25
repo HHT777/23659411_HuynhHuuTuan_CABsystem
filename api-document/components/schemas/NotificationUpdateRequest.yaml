@@ -1,0 +1,11 @@
+type: object
+description: Đánh dấu trạng thái đọc của thông báo.
+properties:
+  read:
+    type: boolean
+    description: Trạng thái đọc; pilot chỉ hỗ trợ đánh dấu đã đọc.
+    example: true
+    enum:
+    - true
+required:
+- read

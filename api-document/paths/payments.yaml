@@ -1,57 +1,88 @@
-/payments:
+/api/v1/payments/provider-callbacks:
   post:
     tags:
-      - Payments
-    summary: "Thanh toán chuyến đi (UC-12)"
-    operationId: createPayment
-    security:
-      - bearerAuth: []
-    description: "Ghi nhận thanh toán tiền mặt hoặc điện tử; không lưu dữ liệu nhạy cảm (BR_12)."
+    - Fare and Payments
+    operationId: receivePaymentProviderCallback
+    summary: Nhận callback thanh toán
+    description: Nhận callback idempotent từ nhà cung cấp sandbox; chỉ kết quả đã xác minh mới được ghi nhận.
+    x-srs-ref: UC-12; FR-25..FR-27; BRULE-10
+    x-roles:
+    - PAYMENT_PROVIDER
+    responses:
+      '200':
+        description: Callback đã xử lý hoặc đã được xử lý trước đó.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/PaymentResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+      '502':
+        $ref: ../components/responses/BadGateway.yaml
+    security: []
+    parameters:
+    - $ref: ../components/parameters/ProviderSignature.yaml
     requestBody:
       required: true
+      description: Dữ liệu yêu cầu.
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/Payment"
-    responses:
-      "201":
-        description: "Thanh toán được ghi nhận."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Payment"
-      "400":
-        description: "Dữ liệu không hợp lệ."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/payments/{paymentId}:
-  get:
+            $ref: ../components/schemas/ProviderCallbackRequest.yaml
+          example:
+            providerReference: sandbox_txn_123
+            paymentId: c50e8400-e29b-41d4-a716-446655440000
+            status: PAID
+            occurredAt: '2026-09-24T10:38:00+07:00'
+    x-assumption: SRS chỉ quy định chữ ký/shared secret cho sandbox nhưng chưa chốt tên header; dùng X-Provider-Signature
+      để đặc tả có thể kiểm thử.
+/api/v1/payments/{id}/cash-confirmation:
+  post:
     tags:
-      - Payments
-    summary: "Tra cứu giao dịch thanh toán"
-    operationId: getPayment
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: paymentId
-        in: path
-        required: true
-        description: "Mã giao dịch."
-        schema:
-          type: string
+    - Fare and Payments
+    operationId: confirmCashPayment
+    summary: Xác nhận thu tiền mặt
+    description: Tài xế xác nhận đã nhận tiền mặt; vận hành có thể tra soát tranh chấp qua audit.
+    x-srs-ref: UC-12; FR-24; FR-26; BRULE-10
+    x-roles:
+    - DRIVER
     responses:
-      "200":
-        description: "Chi tiết giao dịch."
+      '200':
+        description: Thanh toán tiền mặt đã xác nhận.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/Payment"
-      "404":
-        description: "Không tìm thấy giao dịch."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
+              $ref: ../components/schemas/PaymentResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/CashConfirmationRequest.yaml
+          example:
+            received: true

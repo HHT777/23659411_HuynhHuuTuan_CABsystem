@@ -1,0 +1,9 @@
+name: id
+in: path
+required: true
+description: Định danh UUID của tài nguyên trong đường dẫn.
+schema:
+  type: string
+  format: uuid
+  pattern: ^[0-9a-fA-F-]{36}$
+  example: a50e8400-e29b-41d4-a716-446655440000

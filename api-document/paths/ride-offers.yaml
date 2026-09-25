@@ -1,0 +1,43 @@
+/api/v1/ride-offers/{id}/responses:
+  post:
+    tags:
+    - Driver Matching and Dispatch
+    operationId: respondToRideOffer
+    summary: Phản hồi đề nghị chuyến
+    description: Ghi nhận ACCEPT hoặc DECLINE; ghép chuyến là thao tác nguyên tử và đề nghị hết hạn trả 409.
+    x-srs-ref: UC-07; FR-12..FR-15; BRULE-04..BRULE-06; RULE-02
+    x-roles:
+    - DRIVER
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/TripResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    - $ref: ../components/parameters/IdempotencyKey.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/RideOfferDecisionRequest.yaml
+          example:
+            decision: ACCEPT

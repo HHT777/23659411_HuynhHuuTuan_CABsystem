@@ -1,0 +1,16 @@
+type: object
+description: Các trường hồ sơ khách hàng được phép cập nhật.
+properties:
+  name:
+    type: string
+    description: Tên hiển thị mới.
+    example: Nguyễn Văn Bình
+    minLength: 2
+    maxLength: 100
+  phone:
+    type: string
+    description: Số điện thoại mới, phải duy nhất.
+    example: '+84987654321'
+    minLength: 9
+    maxLength: 15
+    pattern: ^\+?[0-9]{9,15}$

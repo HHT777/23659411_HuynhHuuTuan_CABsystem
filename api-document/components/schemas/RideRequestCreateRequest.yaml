@@ -1,0 +1,32 @@
+type: object
+description: Yêu cầu đặt chuyến mới.
+properties:
+  pickup:
+    type: object
+    description: Điểm đón.
+    example:
+      latitude: 10.7769
+      longitude: 106.7009
+      address: 1 Lê Duẩn, Quận 1, TP.HCM
+    allOf:
+    - $ref: ./Coordinate.yaml
+  destination:
+    type: object
+    description: Điểm đến.
+    example:
+      latitude: 10.8022
+      longitude: 106.7145
+      address: Bình Thạnh, TP.HCM
+    allOf:
+    - $ref: ./Coordinate.yaml
+  vehicleType:
+    type: string
+    description: Loại xe mong muốn.
+    example: MOTORCYCLE
+    enum:
+    - MOTORCYCLE
+    - CAR_4
+required:
+- pickup
+- destination
+- vehicleType

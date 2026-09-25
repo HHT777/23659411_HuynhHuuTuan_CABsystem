@@ -1,150 +1,228 @@
 openapi: 3.0.3
 info:
   title: CAB System API
-  description: API cho nền tảng đặt xe CAB System của Công ty ABC.
   version: 1.0.0
+  description: Đặc tả API pilot được truy vết từ SRS.md, mục 18.9 và các quy tắc nghiệp vụ liên quan.
+  license:
+    name: Proprietary
+    url: https://cab-system.invalid/license
+  x-assumption: SRS không quy định URL giấy phép; miền .invalid được dùng làm placeholder tài liệu và phải được thay trước
+    khi phát hành.
 servers:
-  - url: http://localhost:8080/api/v1
-    description: Local server
+- url: /
+  description: Cùng origin với trang tài liệu hoặc API gateway
 tags:
-  - name: Auth
-  - name: Customers
-  - name: Drivers
-  - name: RideRequests
-  - name: Trips
-  - name: Payments
-  - name: Ratings
-  - name: Notifications
-  - name: Vehicles
-  - name: Operators
-  - name: Reports
-  - name: AuditLogs
+- name: Authentication and Accounts
+  description: Đăng ký, xác thực và hồ sơ tài khoản.
+- name: Driver Profiles and Availability
+  description: Hồ sơ và trạng thái sẵn sàng của tài xế.
+- name: Ride Requests
+  description: Tiếp nhận và tra cứu yêu cầu chuyến.
+- name: Driver Matching and Dispatch
+  description: Đề nghị chuyến và phản hồi của tài xế; thuật toán ghép chạy nội bộ.
+- name: Trips and Tracking
+  description: Vòng đời chuyến và theo dõi vị trí.
+- name: Fare and Payments
+  description: Cước chuyến và thanh toán.
+- name: Notifications
+  description: Thông báo in-app.
+- name: Trip History and Ratings
+  description: Lịch sử chuyến và đánh giá tài xế.
+- name: Operations and Incident Support
+  description: Quản lý vận hành, phân quyền, bảng giá và sự cố.
+- name: Reporting
+  description: Báo cáo vận hành tổng hợp.
+security:
+- bearerAuth: []
 paths:
-  /auth/register:
-    $ref: "./paths/auth.yaml#/auth~1register"
-  /auth/login:
-    $ref: "./paths/auth.yaml#/auth~1login"
-  /customers:
-    $ref: "./paths/customers.yaml#/customers"
-  /customers/{customerId}:
-    $ref: "./paths/customers.yaml#/customers~1{customerId}"
-  /drivers:
-    $ref: "./paths/drivers.yaml#/drivers"
-  /drivers/{driverId}:
-    $ref: "./paths/drivers.yaml#/drivers~1{driverId}"
-  /drivers/{driverId}/profile:
-    $ref: "./paths/drivers.yaml#/drivers~1{driverId}~1profile"
-  /drivers/{driverId}/status:
-    $ref: "./paths/drivers.yaml#/drivers~1{driverId}~1status"
-  /drivers/{driverId}/location:
-    $ref: "./paths/drivers.yaml#/drivers~1{driverId}~1location"
-  /ride-requests:
-    $ref: "./paths/ride-requests.yaml#/ride-requests"
-  /ride-requests/{requestId}:
-    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}"
-  /ride-requests/{requestId}/accept:
-    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1accept"
-  /ride-requests/{requestId}/decline:
-    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1decline"
-  /ride-requests/{requestId}/candidates:
-    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1candidates"
-  /ride-requests/{requestId}/reassign:
-    $ref: "./paths/ride-requests.yaml#/ride-requests~1{requestId}~1reassign"
-  /trips:
-    $ref: "./paths/trips.yaml#/trips"
-  /trips/{tripId}:
-    $ref: "./paths/trips.yaml#/trips~1{tripId}"
-  /trips/{tripId}/status:
-    $ref: "./paths/trips.yaml#/trips~1{tripId}~1status"
-  /trips/{tripId}/fare:
-    $ref: "./paths/trips.yaml#/trips~1{tripId}~1fare"
-  /payments:
-    $ref: "./paths/payments.yaml#/payments"
-  /payments/{paymentId}:
-    $ref: "./paths/payments.yaml#/payments~1{paymentId}"
-  /ratings:
-    $ref: "./paths/ratings.yaml#/ratings"
-  /ratings/{ratingId}:
-    $ref: "./paths/ratings.yaml#/ratings~1{ratingId}"
-  /vehicles:
-    $ref: "./paths/vehicles.yaml#/vehicles"
-  /vehicles/{vehicleId}:
-    $ref: "./paths/vehicles.yaml#/vehicles~1{vehicleId}"
-  /notifications:
-    $ref: "./paths/notifications.yaml#/notifications"
-  /notifications/{notificationId}:
-    $ref: "./paths/notifications.yaml#/notifications~1{notificationId}"
-  /notifications/{notificationId}/read:
-    $ref: "./paths/notifications.yaml#/notifications~1{notificationId}~1read"
-  /operators:
-    $ref: "./paths/operators.yaml#/operators"
-  /operators/{operatorId}:
-    $ref: "./paths/operators.yaml#/operators~1{operatorId}"
-  /operators/trips/{tripId}/support:
-    $ref: "./paths/operators.yaml#/operators~1trips~1{tripId}~1support"
-  /audit-logs:
-    $ref: "./paths/operators.yaml#/audit-logs"
-  /reports/operations:
-    $ref: "./paths/reports.yaml#/reports~1operations"
-  /reports/revenue:
-    $ref: "./paths/reports.yaml#/reports~1revenue"
+  /api/v1/auth/register:
+    $ref: ./paths/auth.yaml#/~1api~1v1~1auth~1register
+  /api/v1/auth/login:
+    $ref: ./paths/auth.yaml#/~1api~1v1~1auth~1login
+  /api/v1/auth/refresh:
+    $ref: ./paths/auth.yaml#/~1api~1v1~1auth~1refresh
+  /api/v1/auth/logout:
+    $ref: ./paths/auth.yaml#/~1api~1v1~1auth~1logout
+  /api/v1/me/profile:
+    $ref: ./paths/accounts.yaml#/~1api~1v1~1me~1profile
+  /api/v1/me/trips:
+    $ref: ./paths/accounts.yaml#/~1api~1v1~1me~1trips
+  /api/v1/drivers/me/availability:
+    $ref: ./paths/drivers.yaml#/~1api~1v1~1drivers~1me~1availability
+  /api/v1/drivers/me/offers:
+    $ref: ./paths/drivers.yaml#/~1api~1v1~1drivers~1me~1offers
+  /api/v1/drivers/me/location:
+    $ref: ./paths/drivers.yaml#/~1api~1v1~1drivers~1me~1location
+  /api/v1/ride-requests:
+    $ref: ./paths/ride-requests.yaml#/~1api~1v1~1ride-requests
+  /api/v1/ride-requests/{id}:
+    $ref: ./paths/ride-requests.yaml#/~1api~1v1~1ride-requests~1{id}
+  /api/v1/ride-offers/{id}/responses:
+    $ref: ./paths/ride-offers.yaml#/~1api~1v1~1ride-offers~1{id}~1responses
+  /api/v1/trips/{id}:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}
+  /api/v1/trips/{id}/status:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}~1status
+  /api/v1/trips/{id}/cancellation:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}~1cancellation
+  /api/v1/trips/{id}/fare:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}~1fare
+  /api/v1/trips/{id}/payments:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}~1payments
+  /api/v1/trips/{id}/rating:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}~1rating
+  /api/v1/trips/{id}/incidents:
+    $ref: ./paths/trips.yaml#/~1api~1v1~1trips~1{id}~1incidents
+  /api/v1/payments/provider-callbacks:
+    $ref: ./paths/payments.yaml#/~1api~1v1~1payments~1provider-callbacks
+  /api/v1/payments/{id}/cash-confirmation:
+    $ref: ./paths/payments.yaml#/~1api~1v1~1payments~1{id}~1cash-confirmation
+  /api/v1/notifications:
+    $ref: ./paths/notifications.yaml#/~1api~1v1~1notifications
+  /api/v1/notifications/{id}:
+    $ref: ./paths/notifications.yaml#/~1api~1v1~1notifications~1{id}
+  /api/v1/operations/drivers:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1drivers
+  /api/v1/operations/drivers/{id}:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1drivers~1{id}
+  /api/v1/operations/incidents:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1incidents
+  /api/v1/operations/incidents/{id}:
+    $ref: ./paths/operations.yaml#/~1api~1v1~1operations~1incidents~1{id}
+  /api/v1/admin/roles/{id}:
+    $ref: ./paths/administration.yaml#/~1api~1v1~1admin~1roles~1{id}
+  /api/v1/admin/fares:
+    $ref: ./paths/administration.yaml#/~1api~1v1~1admin~1fares
+  /api/v1/reports/operations:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1operations
 components:
+  schemas:
+    ErrorDetail:
+      $ref: ./components/schemas/ErrorDetail.yaml
+    ErrorResponse:
+      $ref: ./components/schemas/ErrorResponse.yaml
+    PaginationMeta:
+      $ref: ./components/schemas/PaginationMeta.yaml
+    PaginatedResponse:
+      $ref: ./components/schemas/PaginatedResponse.yaml
+    Coordinate:
+      $ref: ./components/schemas/Coordinate.yaml
+    UserCreateRequest:
+      $ref: ./components/schemas/UserCreateRequest.yaml
+    LoginRequest:
+      $ref: ./components/schemas/LoginRequest.yaml
+    TokenRefreshRequest:
+      $ref: ./components/schemas/TokenRefreshRequest.yaml
+    AuthTokensResponse:
+      $ref: ./components/schemas/AuthTokensResponse.yaml
+    UserResponse:
+      $ref: ./components/schemas/UserResponse.yaml
+    ProfileUpdateRequest:
+      $ref: ./components/schemas/ProfileUpdateRequest.yaml
+    DriverAvailabilityRequest:
+      $ref: ./components/schemas/DriverAvailabilityRequest.yaml
+    VehicleResponse:
+      $ref: ./components/schemas/VehicleResponse.yaml
+    DriverResponse:
+      $ref: ./components/schemas/DriverResponse.yaml
+    RideRequestCreateRequest:
+      $ref: ./components/schemas/RideRequestCreateRequest.yaml
+    RideRequestResponse:
+      $ref: ./components/schemas/RideRequestResponse.yaml
+    RideOfferResponse:
+      $ref: ./components/schemas/RideOfferResponse.yaml
+    RideOfferDecisionRequest:
+      $ref: ./components/schemas/RideOfferDecisionRequest.yaml
+    DriverLocationRequest:
+      $ref: ./components/schemas/DriverLocationRequest.yaml
+    DriverLocationResponse:
+      $ref: ./components/schemas/DriverLocationResponse.yaml
+    TripStatusUpdateRequest:
+      $ref: ./components/schemas/TripStatusUpdateRequest.yaml
+    TripCancellationRequest:
+      $ref: ./components/schemas/TripCancellationRequest.yaml
+    TripResponse:
+      $ref: ./components/schemas/TripResponse.yaml
+    FareResponse:
+      $ref: ./components/schemas/FareResponse.yaml
+    PaymentCreateRequest:
+      $ref: ./components/schemas/PaymentCreateRequest.yaml
+    PaymentResponse:
+      $ref: ./components/schemas/PaymentResponse.yaml
+    ProviderCallbackRequest:
+      $ref: ./components/schemas/ProviderCallbackRequest.yaml
+    CashConfirmationRequest:
+      $ref: ./components/schemas/CashConfirmationRequest.yaml
+    NotificationResponse:
+      $ref: ./components/schemas/NotificationResponse.yaml
+    NotificationUpdateRequest:
+      $ref: ./components/schemas/NotificationUpdateRequest.yaml
+    RatingCreateRequest:
+      $ref: ./components/schemas/RatingCreateRequest.yaml
+    RatingResponse:
+      $ref: ./components/schemas/RatingResponse.yaml
+    OperationDriverUpdateRequest:
+      $ref: ./components/schemas/OperationDriverUpdateRequest.yaml
+    RoleUpdateRequest:
+      $ref: ./components/schemas/RoleUpdateRequest.yaml
+    FareTableCreateRequest:
+      $ref: ./components/schemas/FareTableCreateRequest.yaml
+    FareTableResponse:
+      $ref: ./components/schemas/FareTableResponse.yaml
+    IncidentCreateRequest:
+      $ref: ./components/schemas/IncidentCreateRequest.yaml
+    IncidentUpdateRequest:
+      $ref: ./components/schemas/IncidentUpdateRequest.yaml
+    IncidentResponse:
+      $ref: ./components/schemas/IncidentResponse.yaml
+    OperationsReportResponse:
+      $ref: ./components/schemas/OperationsReportResponse.yaml
+    PaginatedRideOfferResponse:
+      $ref: ./components/schemas/PaginatedRideOfferResponse.yaml
+    PaginatedNotificationResponse:
+      $ref: ./components/schemas/PaginatedNotificationResponse.yaml
+    PaginatedTripResponse:
+      $ref: ./components/schemas/PaginatedTripResponse.yaml
+    PaginatedDriverResponse:
+      $ref: ./components/schemas/PaginatedDriverResponse.yaml
+    PaginatedIncidentResponse:
+      $ref: ./components/schemas/PaginatedIncidentResponse.yaml
+  parameters:
+    ResourceId:
+      $ref: ./components/parameters/ResourceId.yaml
+    Page:
+      $ref: ./components/parameters/Page.yaml
+    Size:
+      $ref: ./components/parameters/Size.yaml
+    From:
+      $ref: ./components/parameters/From.yaml
+    To:
+      $ref: ./components/parameters/To.yaml
+    GroupBy:
+      $ref: ./components/parameters/GroupBy.yaml
+    IdempotencyKey:
+      $ref: ./components/parameters/IdempotencyKey.yaml
+    ProviderSignature:
+      $ref: ./components/parameters/ProviderSignature.yaml
+  responses:
+    BadRequest:
+      $ref: ./components/responses/BadRequest.yaml
+    Unauthorized:
+      $ref: ./components/responses/Unauthorized.yaml
+    Forbidden:
+      $ref: ./components/responses/Forbidden.yaml
+    NotFound:
+      $ref: ./components/responses/NotFound.yaml
+    Conflict:
+      $ref: ./components/responses/Conflict.yaml
+    UnprocessableEntity:
+      $ref: ./components/responses/UnprocessableEntity.yaml
+    TooManyRequests:
+      $ref: ./components/responses/TooManyRequests.yaml
+    InternalServerError:
+      $ref: ./components/responses/InternalServerError.yaml
+    BadGateway:
+      $ref: ./components/responses/BadGateway.yaml
   securitySchemes:
     bearerAuth:
-      $ref: "./components/securitySchemes.yaml#/bearerAuth"
-  schemas:
-    User:
-      $ref: "./components/schemas/User.yaml#/User"
-    Customer:
-      $ref: "./components/schemas/Customer.yaml#/Customer"
-    Driver:
-      $ref: "./components/schemas/Driver.yaml#/Driver"
-    DriverLocation:
-      $ref: "./components/schemas/DriverLocation.yaml#/DriverLocation"
-    Vehicle:
-      $ref: "./components/schemas/Vehicle.yaml#/Vehicle"
-    RideRequest:
-      $ref: "./components/schemas/RideRequest.yaml#/RideRequest"
-    Trip:
-      $ref: "./components/schemas/Trip.yaml#/Trip"
-    Fare:
-      $ref: "./components/schemas/Fare.yaml#/Fare"
-    Payment:
-      $ref: "./components/schemas/Payment.yaml#/Payment"
-    Rating:
-      $ref: "./components/schemas/Rating.yaml#/Rating"
-    Notification:
-      $ref: "./components/schemas/Notification.yaml#/Notification"
-    Operator:
-      $ref: "./components/schemas/Operator.yaml#/Operator"
-    AuditLog:
-      $ref: "./components/schemas/Operator.yaml#/AuditLog"
-    MatchCandidate:
-      $ref: "./components/schemas/RideRequest.yaml#/MatchCandidate"
-    Error:
-      $ref: "./components/schemas/Error.yaml#/Error"
-    RegisterRequest:
-      $ref: "./components/schemas/Auth.yaml#/RegisterRequest"
-    LoginRequest:
-      $ref: "./components/schemas/Auth.yaml#/LoginRequest"
-    LoginResponse:
-      $ref: "./components/schemas/Auth.yaml#/LoginResponse"
-    ReportPeriod:
-      $ref: "./components/schemas/Report.yaml#/ReportPeriod"
-    OperationsReport:
-      $ref: "./components/schemas/Report.yaml#/OperationsReport"
-    RevenueReport:
-      $ref: "./components/schemas/Report.yaml#/RevenueReport"
-  responses:
-    Unauthorized:
-      description: Chưa xác thực.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    NotFound:
-      description: Không tìm thấy tài nguyên.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
+      $ref: ./components/securitySchemes.yaml#/bearerAuth

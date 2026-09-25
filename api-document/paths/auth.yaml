@@ -1,59 +1,131 @@
-/auth/register:
+/api/v1/auth/register:
   post:
     tags:
-      - Auth
-    summary: "Đăng ký tài khoản (UC-01)"
-    operationId: register
-    description: "Tạo tài khoản khách hàng hoặc tài xế."
+    - Authentication and Accounts
+    operationId: registerCustomer
+    summary: Đăng ký khách hàng
+    description: Tạo tài khoản khách hàng bằng số điện thoại duy nhất.
+    x-srs-ref: UC-01; FR-01; BRULE-01
+    x-roles:
+    - PUBLIC
+    responses:
+      '201':
+        description: Tài khoản đã được tạo.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/UserResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    security: []
     requestBody:
       required: true
+      description: Dữ liệu yêu cầu.
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/RegisterRequest"
-    responses:
-      "201":
-        description: "Tài khoản được tạo thành công."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/User"
-      "400":
-        description: "Dữ liệu đầu vào không hợp lệ."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-      "409":
-        description: "Email/số điện thoại đã tồn tại."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/auth/login:
+            $ref: ../components/schemas/UserCreateRequest.yaml
+          example:
+            phone: '+84901234567'
+            name: Nguyễn Văn An
+            password: Cab@123456
+/api/v1/auth/login:
   post:
     tags:
-      - Auth
-    summary: "Đăng nhập (UC-02)"
+    - Authentication and Accounts
     operationId: login
-    description: "Xác thực người dùng và cấp bearer token (JWT)."
+    summary: Đăng nhập
+    description: Xác thực tài khoản và phát access token 30 phút cùng refresh token 7 ngày.
+    x-srs-ref: UC-02; FR-04; BRULE-01
+    x-roles:
+    - PUBLIC
+    responses:
+      '200':
+        description: Đăng nhập thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/AuthTokensResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    security: []
     requestBody:
       required: true
+      description: Dữ liệu yêu cầu.
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/LoginRequest"
+            $ref: ../components/schemas/LoginRequest.yaml
+          example:
+            phone: '+84901234567'
+            password: Cab@123456
+/api/v1/auth/refresh:
+  post:
+    tags:
+    - Authentication and Accounts
+    operationId: refreshAccessToken
+    summary: Làm mới token
+    description: Xoay vòng refresh token và cấp access token mới.
+    x-srs-ref: UC-02; FR-04; BRULE-01
+    x-roles:
+    - PUBLIC
     responses:
-      "200":
-        description: "Đăng nhập thành công, trả về token."
+      '200':
+        description: Token mới đã được cấp.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/LoginResponse"
-      "401":
-        description: "Sai thông tin đăng nhập."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
+              $ref: ../components/schemas/AuthTokensResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    security: []
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/TokenRefreshRequest.yaml
+          example:
+            refreshToken: eyJhbGciOiJIUzI1NiJ9.refresh
+/api/v1/auth/logout:
+  post:
+    tags:
+    - Authentication and Accounts
+    operationId: logout
+    summary: Đăng xuất
+    description: Thu hồi refresh token của phiên hiện tại.
+    x-srs-ref: UC-02; FR-04; BRULE-01
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
+    - ADMIN
+    - EXECUTIVE
+    responses:
+      '204':
+        description: Đăng xuất thành công, không có nội dung.
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml

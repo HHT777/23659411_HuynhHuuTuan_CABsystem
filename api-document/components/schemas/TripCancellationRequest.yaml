@@ -1,0 +1,11 @@
+type: object
+description: Thông tin hủy chuyến.
+properties:
+  reason:
+    type: string
+    description: Lý do hủy bắt buộc.
+    example: Khách hàng thay đổi kế hoạch
+    minLength: 3
+    maxLength: 500
+required:
+- reason

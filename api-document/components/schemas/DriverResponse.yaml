@@ -1,0 +1,53 @@
+type: object
+description: Thông tin vận hành của tài xế.
+properties:
+  id:
+    type: string
+    description: Định danh tài xế.
+    example: 750e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  name:
+    type: string
+    description: Tên tài xế.
+    example: Trần Minh Khoa
+    minLength: 2
+    maxLength: 100
+  phone:
+    type: string
+    description: Số điện thoại tài xế.
+    example: '+84905551234'
+    minLength: 9
+    maxLength: 15
+    pattern: ^\+?[0-9]{9,15}$
+  status:
+    type: string
+    description: Trạng thái hồ sơ tài xế.
+    example: ACTIVE
+    enum:
+    - ACTIVE
+    - SUSPENDED
+  availability:
+    type: string
+    description: Trạng thái nhận chuyến.
+    example: ONLINE
+    enum:
+    - ONLINE
+    - OFFLINE
+  vehicle:
+    type: object
+    description: Phương tiện hiện tại của tài xế.
+    example:
+      id: 650e8400-e29b-41d4-a716-446655440000
+      licensePlate: 59A1-123.45
+      vehicleType: MOTORCYCLE
+      status: ACTIVE
+    allOf:
+    - $ref: ./VehicleResponse.yaml
+required:
+- id
+- name
+- phone
+- status
+- availability
+- vehicle

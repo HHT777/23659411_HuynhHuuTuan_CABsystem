@@ -1,0 +1,11 @@
+type: object
+description: Yêu cầu cấp lại access token.
+properties:
+  refreshToken:
+    type: string
+    description: Refresh token còn hiệu lực.
+    example: eyJhbGciOiJIUzI1NiJ9.refresh
+    minLength: 20
+    maxLength: 4096
+required:
+- refreshToken

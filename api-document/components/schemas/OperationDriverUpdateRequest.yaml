@@ -1,0 +1,12 @@
+type: object
+description: Thay đổi trạng thái hồ sơ tài xế bởi vận hành.
+properties:
+  status:
+    type: string
+    description: Trạng thái mới của tài xế.
+    example: SUSPENDED
+    enum:
+    - ACTIVE
+    - SUSPENDED
+required:
+- status

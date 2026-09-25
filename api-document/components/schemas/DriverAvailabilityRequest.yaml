@@ -1,0 +1,12 @@
+type: object
+description: Trạng thái sẵn sàng nhận chuyến.
+properties:
+  availability:
+    type: string
+    description: ONLINE chỉ hợp lệ khi hồ sơ và xe hoạt động, tài xế không có chuyến mở.
+    example: ONLINE
+    enum:
+    - ONLINE
+    - OFFLINE
+required:
+- availability

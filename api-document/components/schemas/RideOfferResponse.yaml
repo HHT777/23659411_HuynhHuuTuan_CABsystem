@@ -1,0 +1,54 @@
+type: object
+description: Đề nghị chuyến dành cho tài xế.
+properties:
+  id:
+    type: string
+    description: Định danh đề nghị.
+    example: 950e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  rideRequestId:
+    type: string
+    description: Định danh yêu cầu chuyến.
+    example: 850e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  pickup:
+    type: object
+    description: Điểm đón.
+    example:
+      latitude: 10.7769
+      longitude: 106.7009
+      address: 1 Lê Duẩn, Quận 1, TP.HCM
+    allOf:
+    - $ref: ./Coordinate.yaml
+  destination:
+    type: object
+    description: Điểm đến.
+    example:
+      latitude: 10.8022
+      longitude: 106.7145
+      address: Bình Thạnh, TP.HCM
+    allOf:
+    - $ref: ./Coordinate.yaml
+  expiresAt:
+    type: string
+    description: Thời điểm hết hạn; cửa sổ phản hồi 20 giây.
+    example: '2026-09-24T10:05:20+07:00'
+    format: date-time
+  status:
+    type: string
+    description: Trạng thái đề nghị.
+    example: PENDING
+    enum:
+    - PENDING
+    - ACCEPTED
+    - DECLINED
+    - EXPIRED
+required:
+- id
+- rideRequestId
+- pickup
+- destination
+- expiresAt
+- status

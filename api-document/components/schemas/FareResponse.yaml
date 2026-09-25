@@ -1,0 +1,46 @@
+type: object
+description: Cước phí được tính nội bộ sau khi hoàn thành chuyến.
+properties:
+  id:
+    type: string
+    description: Định danh bản ghi cước.
+    example: b50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  tripId:
+    type: string
+    description: Định danh chuyến.
+    example: a50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  amount:
+    type: number
+    description: Tổng cước đã làm tròn lên 1.000 VND.
+    example: 42000
+    format: double
+    minimum: 0
+  currency:
+    type: string
+    description: Đơn vị tiền tệ.
+    example: VND
+    enum:
+    - VND
+  fareTableVersion:
+    type: string
+    description: Phiên bản bảng giá áp dụng.
+    example: fare-2026-01
+    minLength: 1
+    maxLength: 50
+  distanceKm:
+    type: number
+    description: Quãng đường tính cước theo km.
+    example: 10.0
+    format: double
+    minimum: 0
+required:
+- id
+- tripId
+- amount
+- currency
+- fareTableVersion
+- distanceKm

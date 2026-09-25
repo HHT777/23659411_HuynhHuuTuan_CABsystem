@@ -2,6 +2,4 @@ bearerAuth:
   type: http
   scheme: bearer
   bearerFormat: JWT
-  description: |
-    Xác thực bằng Bearer token (JWT). Người dùng phải xác thực
-    trước khi dùng chức năng yêu cầu tài khoản (BR_01 / NFR-01).
+  description: JWT access token có thời hạn 30 phút. Không truyền token qua URL.

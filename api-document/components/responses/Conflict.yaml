@@ -1,0 +1,10 @@
+description: Xung đột trạng thái hoặc khóa idempotency.
+content:
+  application/json:
+    schema:
+      $ref: ../schemas/ErrorResponse.yaml
+    example:
+      code: STATE_CONFLICT
+      message: Trạng thái hiện tại không cho phép thao tác.
+      details: []
+      requestId: req_01J8QH8Y7W

@@ -1,146 +1,312 @@
-/trips:
+/api/v1/trips/{id}:
   get:
     tags:
-      - Trips
-    summary: "Lấy danh sách chuyến đi (lịch sử - UC-14 / quản lý - UC-16)"
-    operationId: listTrips
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: customerId
-        in: query
-        required: false
-        description: "Lọc theo khách hàng."
-        schema:
-          type: string
-      - name: driverId
-        in: query
-        required: false
-        description: "Lọc theo tài xế."
-        schema:
-          type: string
-    responses:
-      "200":
-        description: "Danh sách chuyến đi."
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: "../openapi.yaml#/components/schemas/Trip"
-      "401":
-        description: "Chưa xác thực."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/trips/{tripId}:
-  get:
-    tags:
-      - Trips
-    summary: "Theo dõi chuyến - lấy chi tiết (UC-10)"
+    - Trips and Tracking
     operationId: getTrip
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: tripId
-        in: path
-        required: true
-        description: "Mã chuyến đi."
-        schema:
-          type: string
+    summary: Xem chuyến đi
+    description: Khách hàng sở hữu, tài xế được gán hoặc vận hành có quyền được xem; ETA có thể null khi thiếu dữ liệu định
+      tuyến.
+    x-srs-ref: UC-10; FR-21; BRULE-07
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
     responses:
-      "200":
-        description: "Chi tiết chuyến đi và trạng thái hiện tại."
+      '200':
+        description: Thành công.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/Trip"
-      "404":
-        description: "Không tìm thấy chuyến đi."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/trips/{tripId}/status:
-  put:
-    tags:
-      - Trips
-    summary: "Cập nhật trạng thái chuyến (UC-09)"
-    operationId: updateTripStatus
-    security:
-      - bearerAuth: []
-    description: "Tài xế cập nhật mốc chuyến, chuyển đúng thứ tự quy trình (BR_07)."
+              $ref: ../components/schemas/TripResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
     parameters:
-      - name: tripId
-        in: path
-        required: true
-        description: "Mã chuyến đi."
-        schema:
-          type: string
+    - $ref: ../components/parameters/ResourceId.yaml
+/api/v1/trips/{id}/status:
+  patch:
+    tags:
+    - Trips and Tracking
+    operationId: updateTripStatus
+    summary: Cập nhật trạng thái chuyến
+    description: Tài xế được gán chuyển trạng thái theo chuỗi ASSIGNED → ARRIVED_AT_PICKUP → PICKED_UP → IN_PROGRESS → COMPLETED.
+    x-srs-ref: UC-09; FR-17..FR-22; BRULE-07
+    x-roles:
+    - DRIVER
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/TripResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
     requestBody:
       required: true
+      description: Dữ liệu yêu cầu.
       content:
         application/json:
           schema:
-            type: object
-            required:
-              - status
-            properties:
-              status:
-                type: string
-                enum:
-                  - DA_DEN_DIEM_DON
-                  - DA_DON_KHACH
-                  - DANG_DI_CHUYEN
-                  - HOAN_THANH
+            $ref: ../components/schemas/TripStatusUpdateRequest.yaml
+          example:
+            status: ARRIVED_AT_PICKUP
+/api/v1/trips/{id}/cancellation:
+  post:
+    tags:
+    - Trips and Tracking
+    operationId: cancelTrip
+    summary: Hủy chuyến
+    description: Khách hàng hoặc tài xế được hủy trước PICKED_UP và phải nêu lý do; sau đó chỉ vận hành xử lý qua sự cố có
+      audit.
+    x-srs-ref: UC-09; FR-17..FR-22; BRULE-07
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
     responses:
-      "200":
-        description: "Trạng thái chuyến được cập nhật (kèm thông báo nếu cần)."
+      '200':
+        description: Thành công.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/Trip"
-      "400":
-        description: "Trạng thái sai thứ tự quy trình."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-      "404":
-        description: "Không tìm thấy chuyến đi."
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/trips/{tripId}/fare:
+              $ref: ../components/schemas/TripResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/TripCancellationRequest.yaml
+          example:
+            reason: Khách hàng thay đổi kế hoạch
+/api/v1/trips/{id}/fare:
   get:
     tags:
-      - Trips
-    summary: "Tính cước chuyến đi (UC-11)"
-    operationId: getFare
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: tripId
-        in: path
-        required: true
-        description: "Mã chuyến đi."
-        schema:
-          type: string
+    - Fare and Payments
+    operationId: getTripFare
+    summary: Xem cước chuyến
+    description: Trả cước VND đã tính nội bộ; chỉ có sau khi chuyến hoàn thành.
+    x-srs-ref: UC-11; FR-23; BRULE-08; BRULE-09
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
     responses:
-      "200":
-        description: "Số tiền phải trả."
+      '200':
+        description: Cước chuyến.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/Fare"
-      "404":
-        description: "Không tìm thấy chuyến đi."
+              $ref: ../components/schemas/FareResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+/api/v1/trips/{id}/payments:
+  post:
+    tags:
+    - Fare and Payments
+    operationId: createTripPayment
+    summary: Tạo thanh toán chuyến
+    description: Tạo thanh toán tiền mặt hoặc điện tử; một chuyến chỉ có tối đa một thanh toán thành công.
+    x-srs-ref: UC-12; FR-24..FR-27; BRULE-10; RULE-02
+    x-roles:
+    - CUSTOMER
+    responses:
+      '201':
+        description: Thanh toán đã tạo.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
+              $ref: ../components/schemas/PaymentResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+      '502':
+        $ref: ../components/responses/BadGateway.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    - $ref: ../components/parameters/IdempotencyKey.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/PaymentCreateRequest.yaml
+          example:
+            method: ELECTRONIC
+  get:
+    tags:
+    - Fare and Payments
+    operationId: getTripPayment
+    summary: Xem thanh toán chuyến
+    description: Trả trạng thái thanh toán hiện tại của chuyến.
+    x-srs-ref: UC-12; FR-24..FR-27; BRULE-10
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
+    responses:
+      '200':
+        description: Thanh toán của chuyến.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/PaymentResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+/api/v1/trips/{id}/rating:
+  post:
+    tags:
+    - Trip History and Ratings
+    operationId: rateTrip
+    summary: Đánh giá chuyến
+    description: Khách hàng sở hữu được đánh giá một lần, điểm nguyên 1–5, trong 7 ngày kể từ khi hoàn thành.
+    x-srs-ref: UC-15; FR-30; BRULE-07
+    x-roles:
+    - CUSTOMER
+    responses:
+      '201':
+        description: Đánh giá đã tạo.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/RatingResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/RatingCreateRequest.yaml
+          example:
+            score: 5
+            comment: Tài xế thân thiện và đúng giờ.
+/api/v1/trips/{id}/incidents:
+  post:
+    tags:
+    - Operations and Incident Support
+    operationId: createTripIncident
+    summary: Báo cáo sự cố chuyến
+    description: Khách hàng hoặc tài xế của chuyến tạo nguồn sự cố để vận hành xử lý.
+    x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    responses:
+      '201':
+        description: Sự cố đã ghi nhận.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/IncidentResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/IncidentCreateRequest.yaml
+          example:
+            reason: ROUTE
+            note: Tuyến đường bị chặn do thi công.
+    x-assumption: SRS 18.9 ghi đây là endpoint bổ sung baseline để cung cấp nguồn dữ liệu cho UC-17; hợp đồng chi tiết chưa
+      được UC gốc mô tả.

@@ -1,0 +1,18 @@
+type: object
+description: Đánh giá tài xế trong 7 ngày kể từ khi chuyến hoàn thành.
+properties:
+  score:
+    type: integer
+    description: Điểm đánh giá nguyên từ 1 đến 5.
+    example: 5
+    format: int32
+    minimum: 1
+    maximum: 5
+  comment:
+    type: string
+    description: Nhận xét tùy chọn.
+    example: Tài xế thân thiện và đúng giờ.
+    maxLength: 500
+    nullable: true
+required:
+- score

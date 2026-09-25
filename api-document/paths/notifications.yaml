@@ -1,72 +1,70 @@
-/notifications:
+/api/v1/notifications:
   get:
-    tags: [Notifications]
-    summary: Xem thông báo của người dùng hiện tại
-    operationId: listNotifications
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: unreadOnly
-        in: query
-        schema:
-          type: boolean
-          default: false
+    tags:
+    - Notifications
+    operationId: listMyNotifications
+    summary: Danh sách thông báo
+    description: Trả thông báo in-app của tài khoản đang xác thực.
+    x-srs-ref: UC-13; FR-09; FR-15; FR-18; FR-26; FR-27; BRULE-11
+    x-roles:
+    - CUSTOMER
+    - DRIVER
     responses:
-      "200":
+      '200':
         description: Danh sách thông báo.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: "../openapi.yaml#/components/schemas/Notification"
-      "401":
-        $ref: "../openapi.yaml#/components/responses/Unauthorized"
-
-/notifications/{notificationId}:
-  get:
-    tags: [Notifications]
-    summary: Xem một thông báo
-    operationId: getNotification
-    security:
-      - bearerAuth: []
+              $ref: ../components/schemas/PaginatedNotificationResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
     parameters:
-      - name: notificationId
-        in: path
-        required: true
-        schema:
-          type: string
-    responses:
-      "200":
-        description: Thông báo.
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Notification"
-      "404":
-        $ref: "../openapi.yaml#/components/responses/NotFound"
-
-/notifications/{notificationId}/read:
-  post:
-    tags: [Notifications]
-    summary: Đánh dấu thông báo đã đọc
+    - $ref: ../components/parameters/Page.yaml
+    - $ref: ../components/parameters/Size.yaml
+/api/v1/notifications/{id}:
+  patch:
+    tags:
+    - Notifications
     operationId: markNotificationRead
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: notificationId
-        in: path
-        required: true
-        schema:
-          type: string
+    summary: Đánh dấu thông báo đã đọc
+    description: Chỉ người nhận sở hữu thông báo được cập nhật.
+    x-srs-ref: UC-13; BRULE-11
+    x-roles:
+    - CUSTOMER
+    - DRIVER
     responses:
-      "200":
-        description: Thông báo đã được đánh dấu đã đọc.
+      '200':
+        description: Thông báo đã cập nhật.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/Notification"
-      "401":
-        $ref: "../openapi.yaml#/components/responses/Unauthorized"
-      "404":
-        $ref: "../openapi.yaml#/components/responses/NotFound"
+              $ref: ../components/schemas/NotificationResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/NotificationUpdateRequest.yaml
+          example:
+            read: true

@@ -1,0 +1,11 @@
+name: size
+in: query
+required: false
+description: Số phần tử mỗi trang.
+schema:
+  type: integer
+  format: int32
+  minimum: 1
+  maximum: 100
+  default: 20
+  example: 20

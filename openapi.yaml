@@ -1,0 +1,2747 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 1.0.0
+  description: Đặc tả API pilot được truy vết từ SRS.md, mục 18.9 và các quy tắc nghiệp vụ liên quan.
+  license:
+    name: Proprietary
+    url: https://cab-system.invalid/license
+  x-assumption: SRS không quy định URL giấy phép; miền .invalid được dùng làm placeholder tài liệu và phải được thay trước
+    khi phát hành.
+servers:
+- url: /
+  description: Cùng origin với trang tài liệu hoặc API gateway
+tags:
+- name: Authentication and Accounts
+  description: Đăng ký, xác thực và hồ sơ tài khoản.
+- name: Driver Profiles and Availability
+  description: Hồ sơ và trạng thái sẵn sàng của tài xế.
+- name: Ride Requests
+  description: Tiếp nhận và tra cứu yêu cầu chuyến.
+- name: Driver Matching and Dispatch
+  description: Đề nghị chuyến và phản hồi của tài xế; thuật toán ghép chạy nội bộ.
+- name: Trips and Tracking
+  description: Vòng đời chuyến và theo dõi vị trí.
+- name: Fare and Payments
+  description: Cước chuyến và thanh toán.
+- name: Notifications
+  description: Thông báo in-app.
+- name: Trip History and Ratings
+  description: Lịch sử chuyến và đánh giá tài xế.
+- name: Operations and Incident Support
+  description: Quản lý vận hành, phân quyền, bảng giá và sự cố.
+- name: Reporting
+  description: Báo cáo vận hành tổng hợp.
+security:
+- bearerAuth: []
+paths:
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Authentication and Accounts
+      operationId: registerCustomer
+      summary: Đăng ký khách hàng
+      description: Tạo tài khoản khách hàng bằng số điện thoại duy nhất.
+      x-srs-ref: UC-01; FR-01; BRULE-01
+      x-roles:
+      - PUBLIC
+      responses:
+        '201':
+          description: Tài khoản đã được tạo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      security: []
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+            example:
+              phone: '+84901234567'
+              name: Nguyễn Văn An
+              password: Cab@123456
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Authentication and Accounts
+      operationId: login
+      summary: Đăng nhập
+      description: Xác thực tài khoản và phát access token 30 phút cùng refresh token 7 ngày.
+      x-srs-ref: UC-02; FR-04; BRULE-01
+      x-roles:
+      - PUBLIC
+      responses:
+        '200':
+          description: Đăng nhập thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      security: []
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              phone: '+84901234567'
+              password: Cab@123456
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - Authentication and Accounts
+      operationId: refreshAccessToken
+      summary: Làm mới token
+      description: Xoay vòng refresh token và cấp access token mới.
+      x-srs-ref: UC-02; FR-04; BRULE-01
+      x-roles:
+      - PUBLIC
+      responses:
+        '200':
+          description: Token mới đã được cấp.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      security: []
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+            example:
+              refreshToken: eyJhbGciOiJIUzI1NiJ9.refresh
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Authentication and Accounts
+      operationId: logout
+      summary: Đăng xuất
+      description: Thu hồi refresh token của phiên hiện tại.
+      x-srs-ref: UC-02; FR-04; BRULE-01
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      - ADMIN
+      - EXECUTIVE
+      responses:
+        '204':
+          description: Đăng xuất thành công, không có nội dung.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/me/profile:
+    get:
+      tags:
+      - Authentication and Accounts
+      operationId: getMyProfile
+      summary: Xem hồ sơ của tôi
+      description: Trả hồ sơ thuộc tài khoản đang xác thực.
+      x-srs-ref: UC-03; FR-05; BRULE-01
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      - ADMIN
+      - EXECUTIVE
+      responses:
+        '200': &id001
+          description: Thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+      - Authentication and Accounts
+      operationId: updateMyProfile
+      summary: Cập nhật hồ sơ của tôi
+      description: Cập nhật tên hoặc số điện thoại; số điện thoại phải duy nhất.
+      x-srs-ref: UC-03; FR-05; BRULE-01
+      x-roles:
+      - CUSTOMER
+      responses:
+        '200': *id001
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateRequest'
+            example:
+              name: Nguyễn Văn Bình
+              phone: '+84987654321'
+  /api/v1/drivers/me/availability:
+    patch:
+      tags:
+      - Driver Profiles and Availability
+      operationId: updateMyDriverAvailability
+      summary: Cập nhật trạng thái nhận chuyến
+      description: Tài xế chỉ ONLINE khi hồ sơ và xe hoạt động, đồng thời không có chuyến mở.
+      x-srs-ref: UC-04; FR-02; FR-06; BRULE-02
+      x-roles:
+      - DRIVER
+      responses:
+        '200': &id008
+          description: Thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverAvailabilityRequest'
+            example:
+              availability: ONLINE
+  /api/v1/drivers/me/offers:
+    get:
+      tags:
+      - Driver Matching and Dispatch
+      operationId: listMyRideOffers
+      summary: Danh sách đề nghị chuyến
+      description: Trả các đề nghị dành cho tài xế; mỗi đề nghị có cửa sổ phản hồi 20 giây.
+      x-srs-ref: UC-07; FR-12..FR-14; BRULE-04..BRULE-06
+      x-roles:
+      - DRIVER
+      responses:
+        '200':
+          description: Danh sách đề nghị.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRideOfferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: &id005
+      - &id006
+        $ref: '#/components/parameters/Page'
+      - &id007
+        $ref: '#/components/parameters/Size'
+  /api/v1/drivers/me/location:
+    put:
+      tags:
+      - Trips and Tracking
+      operationId: updateMyDriverLocation
+      summary: Cập nhật vị trí tài xế
+      description: Ghi nhận vị trí WGS84 mới nhất; khi online hoặc đang chạy chuyến, tối đa 10 giây mỗi lần cập nhật.
+      x-srs-ref: UC-08; FR-21; BRULE-04; BRULE-07
+      x-roles:
+      - DRIVER
+      responses:
+        '200':
+          description: Vị trí đã cập nhật.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverLocationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverLocationRequest'
+            example:
+              latitude: 10.7769
+              longitude: 106.7009
+  /api/v1/ride-requests:
+    post:
+      tags:
+      - Ride Requests
+      operationId: createRideRequest
+      summary: Tạo yêu cầu chuyến
+      description: Ghi nhận điểm đón, điểm đến, loại xe và bắt đầu ghép tài xế nội bộ.
+      x-srs-ref: UC-05; FR-07..FR-09; BRULE-03; RULE-02
+      x-roles:
+      - CUSTOMER
+      responses:
+        '201':
+          description: Yêu cầu chuyến đã tạo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRequestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideRequestCreateRequest'
+            example:
+              pickup:
+                latitude: 10.7769
+                longitude: 106.7009
+                address: 1 Lê Duẩn, Quận 1, TP.HCM
+              destination:
+                latitude: 10.8022
+                longitude: 106.7145
+                address: Bình Thạnh, TP.HCM
+              vehicleType: MOTORCYCLE
+  /api/v1/ride-requests/{id}:
+    get:
+      tags:
+      - Ride Requests
+      operationId: getRideRequest
+      summary: Xem yêu cầu chuyến
+      description: Chỉ khách hàng sở hữu được xem yêu cầu chuyến.
+      x-srs-ref: UC-05; FR-08; BRULE-03
+      x-roles:
+      - CUSTOMER
+      responses:
+        '200':
+          description: Chi tiết yêu cầu chuyến.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: &id004
+      - &id002
+        $ref: '#/components/parameters/ResourceId'
+  /api/v1/ride-offers/{id}/responses:
+    post:
+      tags:
+      - Driver Matching and Dispatch
+      operationId: respondToRideOffer
+      summary: Phản hồi đề nghị chuyến
+      description: Ghi nhận ACCEPT hoặc DECLINE; ghép chuyến là thao tác nguyên tử và đề nghị hết hạn trả 409.
+      x-srs-ref: UC-07; FR-12..FR-15; BRULE-04..BRULE-06; RULE-02
+      x-roles:
+      - DRIVER
+      responses:
+        '200': &id003
+          description: Thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideOfferDecisionRequest'
+            example:
+              decision: ACCEPT
+  /api/v1/trips/{id}/status:
+    patch:
+      tags:
+      - Trips and Tracking
+      operationId: updateTripStatus
+      summary: Cập nhật trạng thái chuyến
+      description: Tài xế được gán chuyển trạng thái theo chuỗi ASSIGNED → ARRIVED_AT_PICKUP → PICKED_UP → IN_PROGRESS → COMPLETED.
+      x-srs-ref: UC-09; FR-17..FR-22; BRULE-07
+      x-roles:
+      - DRIVER
+      responses:
+        '200': *id003
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripStatusUpdateRequest'
+            example:
+              status: ARRIVED_AT_PICKUP
+  /api/v1/trips/{id}/cancellation:
+    post:
+      tags:
+      - Trips and Tracking
+      operationId: cancelTrip
+      summary: Hủy chuyến
+      description: Khách hàng hoặc tài xế được hủy trước PICKED_UP và phải nêu lý do; sau đó chỉ vận hành xử lý qua sự cố
+        có audit.
+      x-srs-ref: UC-09; FR-17..FR-22; BRULE-07
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      responses:
+        '200': *id003
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripCancellationRequest'
+            example:
+              reason: Khách hàng thay đổi kế hoạch
+  /api/v1/trips/{id}:
+    get:
+      tags:
+      - Trips and Tracking
+      operationId: getTrip
+      summary: Xem chuyến đi
+      description: Khách hàng sở hữu, tài xế được gán hoặc vận hành có quyền được xem; ETA có thể null khi thiếu dữ liệu định
+        tuyến.
+      x-srs-ref: UC-10; FR-21; BRULE-07
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      responses:
+        '200': *id003
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+  /api/v1/trips/{id}/fare:
+    get:
+      tags:
+      - Fare and Payments
+      operationId: getTripFare
+      summary: Xem cước chuyến
+      description: Trả cước VND đã tính nội bộ; chỉ có sau khi chuyến hoàn thành.
+      x-srs-ref: UC-11; FR-23; BRULE-08; BRULE-09
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      responses:
+        '200':
+          description: Cước chuyến.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FareResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+  /api/v1/trips/{id}/payments:
+    post:
+      tags:
+      - Fare and Payments
+      operationId: createTripPayment
+      summary: Tạo thanh toán chuyến
+      description: Tạo thanh toán tiền mặt hoặc điện tử; một chuyến chỉ có tối đa một thanh toán thành công.
+      x-srs-ref: UC-12; FR-24..FR-27; BRULE-10; RULE-02
+      x-roles:
+      - CUSTOMER
+      responses:
+        '201':
+          description: Thanh toán đã tạo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+            example:
+              method: ELECTRONIC
+    get:
+      tags:
+      - Fare and Payments
+      operationId: getTripPayment
+      summary: Xem thanh toán chuyến
+      description: Trả trạng thái thanh toán hiện tại của chuyến.
+      x-srs-ref: UC-12; FR-24..FR-27; BRULE-10
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      responses:
+        '200':
+          description: Thanh toán của chuyến.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+  /api/v1/payments/provider-callbacks:
+    post:
+      tags:
+      - Fare and Payments
+      operationId: receivePaymentProviderCallback
+      summary: Nhận callback thanh toán
+      description: Nhận callback idempotent từ nhà cung cấp sandbox; chỉ kết quả đã xác minh mới được ghi nhận.
+      x-srs-ref: UC-12; FR-25..FR-27; BRULE-10
+      x-roles:
+      - PAYMENT_PROVIDER
+      responses:
+        '200':
+          description: Callback đã xử lý hoặc đã được xử lý trước đó.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/ProviderSignature'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderCallbackRequest'
+            example:
+              providerReference: sandbox_txn_123
+              paymentId: c50e8400-e29b-41d4-a716-446655440000
+              status: PAID
+              occurredAt: '2026-09-24T10:38:00+07:00'
+      x-assumption: SRS chỉ quy định chữ ký/shared secret cho sandbox nhưng chưa chốt tên header; dùng X-Provider-Signature
+        để đặc tả có thể kiểm thử.
+  /api/v1/payments/{id}/cash-confirmation:
+    post:
+      tags:
+      - Fare and Payments
+      operationId: confirmCashPayment
+      summary: Xác nhận thu tiền mặt
+      description: Tài xế xác nhận đã nhận tiền mặt; vận hành có thể tra soát tranh chấp qua audit.
+      x-srs-ref: UC-12; FR-24; FR-26; BRULE-10
+      x-roles:
+      - DRIVER
+      responses:
+        '200':
+          description: Thanh toán tiền mặt đã xác nhận.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashConfirmationRequest'
+            example:
+              received: true
+  /api/v1/notifications:
+    get:
+      tags:
+      - Notifications
+      operationId: listMyNotifications
+      summary: Danh sách thông báo
+      description: Trả thông báo in-app của tài khoản đang xác thực.
+      x-srs-ref: UC-13; FR-09; FR-15; FR-18; FR-26; FR-27; BRULE-11
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      responses:
+        '200':
+          description: Danh sách thông báo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id005
+  /api/v1/notifications/{id}:
+    patch:
+      tags:
+      - Notifications
+      operationId: markNotificationRead
+      summary: Đánh dấu thông báo đã đọc
+      description: Chỉ người nhận sở hữu thông báo được cập nhật.
+      x-srs-ref: UC-13; BRULE-11
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      responses:
+        '200':
+          description: Thông báo đã cập nhật.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationUpdateRequest'
+            example:
+              read: true
+  /api/v1/me/trips:
+    get:
+      tags:
+      - Trip History and Ratings
+      operationId: listMyTrips
+      summary: Lịch sử chuyến của tôi
+      description: Trả lịch sử chuyến có phân trang và lọc thời gian; from bao gồm, to không bao gồm, tối đa 366 ngày.
+      x-srs-ref: UC-14; FR-28; FR-29; BRULE-07
+      x-roles:
+      - CUSTOMER
+      responses:
+        '200':
+          description: Lịch sử chuyến.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTripResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters:
+      - *id006
+      - *id007
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+  /api/v1/trips/{id}/rating:
+    post:
+      tags:
+      - Trip History and Ratings
+      operationId: rateTrip
+      summary: Đánh giá chuyến
+      description: Khách hàng sở hữu được đánh giá một lần, điểm nguyên 1–5, trong 7 ngày kể từ khi hoàn thành.
+      x-srs-ref: UC-15; FR-30; BRULE-07
+      x-roles:
+      - CUSTOMER
+      responses:
+        '201':
+          description: Đánh giá đã tạo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingCreateRequest'
+            example:
+              score: 5
+              comment: Tài xế thân thiện và đúng giờ.
+  /api/v1/operations/drivers:
+    get:
+      tags:
+      - Operations and Incident Support
+      operationId: listDriversForOperations
+      summary: Danh sách tài xế vận hành
+      description: Vận hành tra cứu trạng thái hồ sơ, phương tiện và khả dụng của tài xế.
+      x-srs-ref: UC-16; FR-31..FR-33; BRULE-12; BRULE-13
+      x-roles:
+      - OPERATOR
+      - ADMIN
+      responses:
+        '200':
+          description: Danh sách tài xế.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDriverResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id005
+  /api/v1/operations/drivers/{id}:
+    patch:
+      tags:
+      - Operations and Incident Support
+      operationId: updateDriverForOperations
+      summary: Cập nhật trạng thái tài xế
+      description: Vận hành khóa hoặc kích hoạt hồ sơ tài xế theo quyền; thay đổi được audit.
+      x-srs-ref: UC-16; FR-31..FR-35; BRULE-12..BRULE-14
+      x-roles:
+      - OPERATOR
+      - ADMIN
+      responses:
+        '200': *id008
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationDriverUpdateRequest'
+            example:
+              status: SUSPENDED
+  /api/v1/admin/roles/{id}:
+    patch:
+      tags:
+      - Operations and Incident Support
+      operationId: updateAdministrativeRole
+      summary: Cập nhật vai trò quản trị
+      description: Quản trị viên cấp hoặc thu hồi vai trò vận hành/báo cáo; thao tác được audit.
+      x-srs-ref: UC-16; FR-31; FR-35; BRULE-12..BRULE-14
+      x-roles:
+      - ADMIN
+      responses:
+        '200': *id001
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdateRequest'
+            example:
+              role: OPERATOR
+  /api/v1/admin/fares:
+    post:
+      tags:
+      - Operations and Incident Support
+      operationId: createFareTable
+      summary: Tạo bảng giá
+      description: Quản trị viên tạo phiên bản bảng giá; phiên bản được lưu cùng yêu cầu chuyến và thao tác được audit.
+      x-srs-ref: UC-16; FR-35; BRULE-08; BRULE-09; BRULE-14
+      x-roles:
+      - ADMIN
+      responses:
+        '201':
+          description: Bảng giá đã tạo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FareTableResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FareTableCreateRequest'
+            example:
+              version: fare-2026-02
+              vehicleType: MOTORCYCLE
+              openingFare: 10000
+              includedKm: 2
+              perKmFare: 4000
+              effectiveFrom: '2026-10-01T00:00:00+07:00'
+  /api/v1/trips/{id}/incidents:
+    post:
+      tags:
+      - Operations and Incident Support
+      operationId: createTripIncident
+      summary: Báo cáo sự cố chuyến
+      description: Khách hàng hoặc tài xế của chuyến tạo nguồn sự cố để vận hành xử lý.
+      x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      responses:
+        '201':
+          description: Sự cố đã ghi nhận.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentCreateRequest'
+            example:
+              reason: ROUTE
+              note: Tuyến đường bị chặn do thi công.
+      x-assumption: SRS 18.9 ghi đây là endpoint bổ sung baseline để cung cấp nguồn dữ liệu cho UC-17; hợp đồng chi tiết chưa
+        được UC gốc mô tả.
+  /api/v1/operations/incidents:
+    get:
+      tags:
+      - Operations and Incident Support
+      operationId: listIncidentsForOperations
+      summary: Danh sách sự cố
+      description: Vận hành xem hàng đợi sự cố để hỗ trợ và xử lý.
+      x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
+      x-roles:
+      - OPERATOR
+      - ADMIN
+      responses:
+        '200':
+          description: Danh sách sự cố.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedIncidentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id005
+  /api/v1/operations/incidents/{id}:
+    patch:
+      tags:
+      - Operations and Incident Support
+      operationId: updateIncidentForOperations
+      summary: Xử lý sự cố
+      description: Cập nhật trạng thái và kết quả xử lý; thao tác phải được audit.
+      x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
+      x-roles:
+      - OPERATOR
+      - ADMIN
+      responses:
+        '200':
+          description: Sự cố đã cập nhật.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters: *id004
+      requestBody:
+        required: true
+        description: Dữ liệu yêu cầu.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentUpdateRequest'
+            example:
+              status: RESOLVED
+              resolution: Đã xác minh và hỗ trợ hai bên.
+  /api/v1/reports/operations:
+    get:
+      tags:
+      - Reporting
+      operationId: getOperationsReport
+      summary: Báo cáo vận hành
+      description: Tổng hợp chuyến, doanh thu, tỷ lệ hoàn thành/hủy và hiệu suất tài xế theo Asia/Ho_Chi_Minh; mẫu số 0 trả
+        null/N/A.
+      x-srs-ref: UC-18; FR-36..FR-38; NFR-01..NFR-03
+      x-roles:
+      - EXECUTIVE
+      - ADMIN
+      responses:
+        '200':
+          description: Báo cáo vận hành.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/GroupBy'
+components:
+  schemas:
+    ErrorDetail:
+      type: object
+      description: Chi tiết lỗi tại một trường dữ liệu.
+      properties:
+        field:
+          type: string
+          description: Tên trường gây lỗi.
+          example: phone
+          minLength: 1
+          maxLength: 100
+        reason:
+          type: string
+          description: Nguyên nhân trường không hợp lệ.
+          example: Số điện thoại đã tồn tại.
+          minLength: 1
+          maxLength: 500
+      required:
+      - field
+      - reason
+    ErrorResponse:
+      type: object
+      description: Định dạng lỗi thống nhất của API.
+      properties:
+        code:
+          type: string
+          description: Mã lỗi ổn định cho máy khách.
+          example: PHONE_ALREADY_EXISTS
+          minLength: 1
+          maxLength: 100
+        message:
+          type: string
+          description: Thông báo lỗi dễ đọc.
+          example: Không thể xử lý yêu cầu.
+          minLength: 1
+          maxLength: 500
+        details:
+          type: array
+          description: Danh sách chi tiết lỗi.
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+          - field: phone
+            reason: Số điện thoại đã tồn tại.
+        requestId:
+          type: string
+          description: Mã truy vết yêu cầu.
+          example: req_01J8QH8Y7W
+          minLength: 1
+          maxLength: 100
+      required:
+      - code
+      - message
+      - details
+      - requestId
+    PaginationMeta:
+      type: object
+      description: Thông tin phân trang.
+      properties:
+        page:
+          type: integer
+          description: Trang hiện tại, bắt đầu từ 1.
+          example: 1
+          format: int32
+          minimum: 1
+          maximum: 1000
+        size:
+          type: integer
+          description: Số phần tử mỗi trang.
+          example: 20
+          format: int32
+          minimum: 1
+          maximum: 100
+        totalItems:
+          type: integer
+          description: Tổng số phần tử.
+          example: 42
+          format: int64
+          minimum: 0
+        totalPages:
+          type: integer
+          description: Tổng số trang.
+          example: 3
+          format: int32
+          minimum: 0
+      required:
+      - page
+      - size
+      - totalItems
+      - totalPages
+    PaginatedResponse:
+      type: object
+      description: Khung phản hồi phân trang dùng lại.
+      properties:
+        data:
+          type: array
+          description: Danh sách dữ liệu của trang.
+          items:
+            type: object
+            description: Một phần tử kết quả.
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+          example:
+          - id: 550e8400-e29b-41d4-a716-446655440000
+        pagination:
+          type: object
+          description: Metadata phân trang.
+          example:
+            page: 1
+            size: 20
+            totalItems: 42
+            totalPages: 3
+          allOf:
+          - $ref: '#/components/schemas/PaginationMeta'
+      required:
+      - data
+      - pagination
+    Coordinate:
+      type: object
+      description: Tọa độ WGS84.
+      properties:
+        latitude:
+          type: number
+          description: Vĩ độ WGS84.
+          example: 10.7769
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          description: Kinh độ WGS84.
+          example: 106.7009
+          format: double
+          minimum: -180
+          maximum: 180
+        address:
+          type: string
+          description: Địa chỉ hiển thị.
+          example: 1 Lê Duẩn, Quận 1, TP.HCM
+          minLength: 1
+          maxLength: 255
+      required:
+      - latitude
+      - longitude
+      - address
+    UserCreateRequest:
+      type: object
+      description: Thông tin đăng ký khách hàng.
+      properties:
+        phone:
+          type: string
+          description: Số điện thoại duy nhất của tài khoản.
+          example: '+84901234567'
+          minLength: 9
+          maxLength: 15
+          pattern: ^\+?[0-9]{9,15}$
+        name:
+          type: string
+          description: Tên hiển thị của khách hàng.
+          example: Nguyễn Văn An
+          minLength: 2
+          maxLength: 100
+        password:
+          type: string
+          description: Mật khẩu tài khoản; không được ghi log.
+          example: Cab@123456
+          format: password
+          minLength: 8
+          maxLength: 72
+      required:
+      - phone
+      - name
+      - password
+    LoginRequest:
+      type: object
+      description: Thông tin đăng nhập.
+      properties:
+        phone:
+          type: string
+          description: Số điện thoại tài khoản.
+          example: '+84901234567'
+          minLength: 9
+          maxLength: 15
+          pattern: ^\+?[0-9]{9,15}$
+        password:
+          type: string
+          description: Mật khẩu tài khoản.
+          example: Cab@123456
+          format: password
+          minLength: 8
+          maxLength: 72
+      required:
+      - phone
+      - password
+    TokenRefreshRequest:
+      type: object
+      description: Yêu cầu cấp lại access token.
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token còn hiệu lực.
+          example: eyJhbGciOiJIUzI1NiJ9.refresh
+          minLength: 20
+          maxLength: 4096
+      required:
+      - refreshToken
+    AuthTokensResponse:
+      type: object
+      description: Cặp token xác thực; refresh token được xoay vòng khi làm mới.
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token có hiệu lực 30 phút.
+          example: eyJhbGciOiJIUzI1NiJ9.access
+          minLength: 20
+          maxLength: 4096
+        refreshToken:
+          type: string
+          description: Refresh token có hiệu lực 7 ngày.
+          example: eyJhbGciOiJIUzI1NiJ9.refresh
+          minLength: 20
+          maxLength: 4096
+        tokenType:
+          type: string
+          description: Loại token dùng ở Authorization header.
+          example: Bearer
+          enum:
+          - Bearer
+        expiresIn:
+          type: integer
+          description: Thời hạn access token tính bằng giây.
+          example: 1800
+          format: int32
+          minimum: 1
+          maximum: 1800
+      required:
+      - accessToken
+      - refreshToken
+      - tokenType
+      - expiresIn
+    UserResponse:
+      type: object
+      description: Thông tin tài khoản trả về cho máy khách.
+      properties:
+        id:
+          type: string
+          description: Định danh tài khoản.
+          example: 550e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        phone:
+          type: string
+          description: Số điện thoại tài khoản.
+          example: '+84901234567'
+          minLength: 9
+          maxLength: 15
+          pattern: ^\+?[0-9]{9,15}$
+        name:
+          type: string
+          description: Tên hiển thị.
+          example: Nguyễn Văn An
+          minLength: 2
+          maxLength: 100
+        role:
+          type: string
+          description: Vai trò chính.
+          example: CUSTOMER
+          enum:
+          - CUSTOMER
+          - DRIVER
+          - OPERATOR
+          - ADMIN
+          - EXECUTIVE
+        createdAt:
+          type: string
+          description: Thời điểm tạo tài khoản.
+          example: '2026-09-24T10:00:00+07:00'
+          format: date-time
+      required:
+      - id
+      - phone
+      - name
+      - role
+      - createdAt
+    ProfileUpdateRequest:
+      type: object
+      description: Các trường hồ sơ khách hàng được phép cập nhật.
+      properties:
+        name:
+          type: string
+          description: Tên hiển thị mới.
+          example: Nguyễn Văn Bình
+          minLength: 2
+          maxLength: 100
+        phone:
+          type: string
+          description: Số điện thoại mới, phải duy nhất.
+          example: '+84987654321'
+          minLength: 9
+          maxLength: 15
+          pattern: ^\+?[0-9]{9,15}$
+    DriverAvailabilityRequest:
+      type: object
+      description: Trạng thái sẵn sàng nhận chuyến.
+      properties:
+        availability:
+          type: string
+          description: ONLINE chỉ hợp lệ khi hồ sơ và xe hoạt động, tài xế không có chuyến mở.
+          example: ONLINE
+          enum:
+          - ONLINE
+          - OFFLINE
+      required:
+      - availability
+    VehicleResponse:
+      type: object
+      description: Thông tin phương tiện.
+      properties:
+        id:
+          type: string
+          description: Định danh phương tiện.
+          example: 650e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        licensePlate:
+          type: string
+          description: Biển số xe.
+          example: 59A1-123.45
+          minLength: 5
+          maxLength: 20
+          pattern: ^[A-Za-z0-9.-]{5,20}$
+        vehicleType:
+          type: string
+          description: Loại phương tiện trong pilot.
+          example: MOTORCYCLE
+          enum:
+          - MOTORCYCLE
+          - CAR_4
+        status:
+          type: string
+          description: Trạng thái vận hành của xe.
+          example: ACTIVE
+          enum:
+          - ACTIVE
+          - INACTIVE
+      required:
+      - id
+      - licensePlate
+      - vehicleType
+      - status
+    DriverResponse:
+      type: object
+      description: Thông tin vận hành của tài xế.
+      properties:
+        id:
+          type: string
+          description: Định danh tài xế.
+          example: 750e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        name:
+          type: string
+          description: Tên tài xế.
+          example: Trần Minh Khoa
+          minLength: 2
+          maxLength: 100
+        phone:
+          type: string
+          description: Số điện thoại tài xế.
+          example: '+84905551234'
+          minLength: 9
+          maxLength: 15
+          pattern: ^\+?[0-9]{9,15}$
+        status:
+          type: string
+          description: Trạng thái hồ sơ tài xế.
+          example: ACTIVE
+          enum:
+          - ACTIVE
+          - SUSPENDED
+        availability:
+          type: string
+          description: Trạng thái nhận chuyến.
+          example: ONLINE
+          enum:
+          - ONLINE
+          - OFFLINE
+        vehicle:
+          type: object
+          description: Phương tiện hiện tại của tài xế.
+          example:
+            id: 650e8400-e29b-41d4-a716-446655440000
+            licensePlate: 59A1-123.45
+            vehicleType: MOTORCYCLE
+            status: ACTIVE
+          allOf:
+          - $ref: '#/components/schemas/VehicleResponse'
+      required:
+      - id
+      - name
+      - phone
+      - status
+      - availability
+      - vehicle
+    RideRequestCreateRequest:
+      type: object
+      description: Yêu cầu đặt chuyến mới.
+      properties:
+        pickup:
+          type: object
+          description: Điểm đón.
+          example:
+            latitude: 10.7769
+            longitude: 106.7009
+            address: 1 Lê Duẩn, Quận 1, TP.HCM
+          allOf:
+          - $ref: '#/components/schemas/Coordinate'
+        destination:
+          type: object
+          description: Điểm đến.
+          example:
+            latitude: 10.8022
+            longitude: 106.7145
+            address: Bình Thạnh, TP.HCM
+          allOf:
+          - $ref: '#/components/schemas/Coordinate'
+        vehicleType:
+          type: string
+          description: Loại xe mong muốn.
+          example: MOTORCYCLE
+          enum:
+          - MOTORCYCLE
+          - CAR_4
+      required:
+      - pickup
+      - destination
+      - vehicleType
+    RideRequestResponse:
+      type: object
+      description: Yêu cầu chuyến đã được ghi nhận.
+      properties:
+        id:
+          type: string
+          description: Định danh yêu cầu chuyến.
+          example: 850e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        customerId:
+          type: string
+          description: Định danh khách hàng sở hữu.
+          example: 550e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        pickup:
+          type: object
+          description: Điểm đón.
+          example:
+            latitude: 10.7769
+            longitude: 106.7009
+            address: 1 Lê Duẩn, Quận 1, TP.HCM
+          allOf:
+          - $ref: '#/components/schemas/Coordinate'
+        destination:
+          type: object
+          description: Điểm đến.
+          example:
+            latitude: 10.8022
+            longitude: 106.7145
+            address: Bình Thạnh, TP.HCM
+          allOf:
+          - $ref: '#/components/schemas/Coordinate'
+        vehicleType:
+          type: string
+          description: Loại xe yêu cầu.
+          example: MOTORCYCLE
+          enum:
+          - MOTORCYCLE
+          - CAR_4
+        status:
+          type: string
+          description: Trạng thái yêu cầu.
+          example: SEARCHING
+          enum:
+          - SEARCHING
+          - ASSIGNED
+          - NO_DRIVER_FOUND
+          - CANCELLED
+        fareTableVersion:
+          type: string
+          description: Phiên bản bảng giá được chốt khi tạo yêu cầu.
+          example: fare-2026-01
+          minLength: 1
+          maxLength: 50
+        createdAt:
+          type: string
+          description: Thời điểm tạo yêu cầu.
+          example: '2026-09-24T10:05:00+07:00'
+          format: date-time
+      required:
+      - id
+      - customerId
+      - pickup
+      - destination
+      - vehicleType
+      - status
+      - fareTableVersion
+      - createdAt
+    RideOfferResponse:
+      type: object
+      description: Đề nghị chuyến dành cho tài xế.
+      properties:
+        id:
+          type: string
+          description: Định danh đề nghị.
+          example: 950e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        rideRequestId:
+          type: string
+          description: Định danh yêu cầu chuyến.
+          example: 850e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        pickup:
+          type: object
+          description: Điểm đón.
+          example:
+            latitude: 10.7769
+            longitude: 106.7009
+            address: 1 Lê Duẩn, Quận 1, TP.HCM
+          allOf:
+          - $ref: '#/components/schemas/Coordinate'
+        destination:
+          type: object
+          description: Điểm đến.
+          example:
+            latitude: 10.8022
+            longitude: 106.7145
+            address: Bình Thạnh, TP.HCM
+          allOf:
+          - $ref: '#/components/schemas/Coordinate'
+        expiresAt:
+          type: string
+          description: Thời điểm hết hạn; cửa sổ phản hồi 20 giây.
+          example: '2026-09-24T10:05:20+07:00'
+          format: date-time
+        status:
+          type: string
+          description: Trạng thái đề nghị.
+          example: PENDING
+          enum:
+          - PENDING
+          - ACCEPTED
+          - DECLINED
+          - EXPIRED
+      required:
+      - id
+      - rideRequestId
+      - pickup
+      - destination
+      - expiresAt
+      - status
+    RideOfferDecisionRequest:
+      type: object
+      description: Quyết định của tài xế với đề nghị chuyến.
+      properties:
+        decision:
+          type: string
+          description: Chấp nhận hoặc từ chối đề nghị.
+          example: ACCEPT
+          enum:
+          - ACCEPT
+          - DECLINE
+      required:
+      - decision
+    DriverLocationRequest:
+      type: object
+      description: Vị trí mới nhất của tài xế theo WGS84.
+      properties:
+        latitude:
+          type: number
+          description: Vĩ độ WGS84.
+          example: 10.7769
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          description: Kinh độ WGS84.
+          example: 106.7009
+          format: double
+          minimum: -180
+          maximum: 180
+      required:
+      - latitude
+      - longitude
+    DriverLocationResponse:
+      type: object
+      description: Vị trí tài xế đã lưu.
+      properties:
+        driverId:
+          type: string
+          description: Định danh tài xế.
+          example: 750e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        latitude:
+          type: number
+          description: Vĩ độ WGS84.
+          example: 10.7769
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          description: Kinh độ WGS84.
+          example: 106.7009
+          format: double
+          minimum: -180
+          maximum: 180
+        updatedAt:
+          type: string
+          description: Thời điểm cập nhật vị trí.
+          example: '2026-09-24T10:06:00+07:00'
+          format: date-time
+      required:
+      - driverId
+      - latitude
+      - longitude
+      - updatedAt
+    TripStatusUpdateRequest:
+      type: object
+      description: Trạng thái chuyến tiếp theo trong luồng hợp lệ.
+      properties:
+        status:
+          type: string
+          description: Trạng thái mới.
+          example: ARRIVED_AT_PICKUP
+          enum:
+          - ARRIVED_AT_PICKUP
+          - PICKED_UP
+          - IN_PROGRESS
+          - COMPLETED
+      required:
+      - status
+    TripCancellationRequest:
+      type: object
+      description: Thông tin hủy chuyến.
+      properties:
+        reason:
+          type: string
+          description: Lý do hủy bắt buộc.
+          example: Khách hàng thay đổi kế hoạch
+          minLength: 3
+          maxLength: 500
+      required:
+      - reason
+    TripResponse:
+      type: object
+      description: Thông tin chuyến đi.
+      properties:
+        id:
+          type: string
+          description: Định danh chuyến.
+          example: a50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        rideRequestId:
+          type: string
+          description: Định danh yêu cầu gốc.
+          example: 850e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        customerId:
+          type: string
+          description: Định danh khách hàng.
+          example: 550e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        driverId:
+          type: string
+          description: Định danh tài xế.
+          example: 750e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        status:
+          type: string
+          description: Trạng thái chuyến.
+          example: IN_PROGRESS
+          enum:
+          - ASSIGNED
+          - ARRIVED_AT_PICKUP
+          - PICKED_UP
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
+        driverLocation:
+          type: object
+          description: Vị trí mới nhất của tài xế.
+          example:
+            driverId: 750e8400-e29b-41d4-a716-446655440000
+            latitude: 10.7769
+            longitude: 106.7009
+            updatedAt: '2026-09-24T10:06:00+07:00'
+          allOf:
+          - $ref: '#/components/schemas/DriverLocationResponse'
+        etaMinutes:
+          type: integer
+          description: ETA theo phút; null khi không có dữ liệu định tuyến.
+          example: 8
+          format: int32
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        createdAt:
+          type: string
+          description: Thời điểm tạo chuyến.
+          example: '2026-09-24T10:06:10+07:00'
+          format: date-time
+        completedAt:
+          type: string
+          description: Thời điểm hoàn thành, null nếu chưa hoàn thành.
+          example: '2026-09-24T10:36:10+07:00'
+          nullable: true
+          format: date-time
+      required:
+      - id
+      - rideRequestId
+      - customerId
+      - driverId
+      - status
+      - createdAt
+    FareResponse:
+      type: object
+      description: Cước phí được tính nội bộ sau khi hoàn thành chuyến.
+      properties:
+        id:
+          type: string
+          description: Định danh bản ghi cước.
+          example: b50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        tripId:
+          type: string
+          description: Định danh chuyến.
+          example: a50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        amount:
+          type: number
+          description: Tổng cước đã làm tròn lên 1.000 VND.
+          example: 42000
+          format: double
+          minimum: 0
+        currency:
+          type: string
+          description: Đơn vị tiền tệ.
+          example: VND
+          enum:
+          - VND
+        fareTableVersion:
+          type: string
+          description: Phiên bản bảng giá áp dụng.
+          example: fare-2026-01
+          minLength: 1
+          maxLength: 50
+        distanceKm:
+          type: number
+          description: Quãng đường tính cước theo km.
+          example: 10.0
+          format: double
+          minimum: 0
+      required:
+      - id
+      - tripId
+      - amount
+      - currency
+      - fareTableVersion
+      - distanceKm
+    PaymentCreateRequest:
+      type: object
+      description: Phương thức thanh toán cho chuyến đã hoàn thành.
+      properties:
+        method:
+          type: string
+          description: Phương thức thanh toán.
+          example: ELECTRONIC
+          enum:
+          - CASH
+          - ELECTRONIC
+      required:
+      - method
+    PaymentResponse:
+      type: object
+      description: Kết quả thanh toán không chứa dữ liệu thẻ hoặc tài khoản nhạy cảm.
+      properties:
+        id:
+          type: string
+          description: Định danh thanh toán.
+          example: c50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        tripId:
+          type: string
+          description: Định danh chuyến.
+          example: a50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        method:
+          type: string
+          description: Phương thức thanh toán.
+          example: ELECTRONIC
+          enum:
+          - CASH
+          - ELECTRONIC
+        status:
+          type: string
+          description: Trạng thái thanh toán.
+          example: PAID
+          enum:
+          - PENDING
+          - PAID
+          - FAILED
+          - UNKNOWN
+        amount:
+          type: number
+          description: Số tiền thanh toán bằng VND.
+          example: 42000
+          format: double
+          minimum: 0
+        providerReference:
+          type: string
+          description: Mã tham chiếu sandbox của nhà cung cấp.
+          example: sandbox_txn_123
+          maxLength: 100
+          nullable: true
+        updatedAt:
+          type: string
+          description: Thời điểm cập nhật gần nhất.
+          example: '2026-09-24T10:38:00+07:00'
+          format: date-time
+      required:
+      - id
+      - tripId
+      - method
+      - status
+      - amount
+      - updatedAt
+    ProviderCallbackRequest:
+      type: object
+      description: Callback từ nhà cung cấp thanh toán sandbox.
+      properties:
+        providerReference:
+          type: string
+          description: Mã giao dịch phía nhà cung cấp.
+          example: sandbox_txn_123
+          minLength: 1
+          maxLength: 100
+        paymentId:
+          type: string
+          description: Định danh thanh toán nội bộ.
+          example: c50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        status:
+          type: string
+          description: Kết quả tin cậy từ nhà cung cấp.
+          example: PAID
+          enum:
+          - PAID
+          - FAILED
+          - UNKNOWN
+        occurredAt:
+          type: string
+          description: Thời điểm phát sinh kết quả.
+          example: '2026-09-24T10:38:00+07:00'
+          format: date-time
+      required:
+      - providerReference
+      - paymentId
+      - status
+      - occurredAt
+    CashConfirmationRequest:
+      type: object
+      description: Xác nhận tài xế đã nhận tiền mặt.
+      properties:
+        received:
+          type: boolean
+          description: Phải là true để xác nhận đã thu tiền.
+          example: true
+          enum:
+          - true
+      required:
+      - received
+    NotificationResponse:
+      type: object
+      description: Thông báo in-app của người nhận.
+      properties:
+        id:
+          type: string
+          description: Định danh thông báo.
+          example: d50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        eventType:
+          type: string
+          description: Loại sự kiện nghiệp vụ.
+          example: DRIVER_ASSIGNED
+          enum:
+          - REQUEST_RECEIVED
+          - DRIVER_ASSIGNED
+          - DRIVER_ARRIVED
+          - TRIP_COMPLETED
+          - TRIP_CANCELLED
+          - NO_DRIVER_FOUND
+          - PAYMENT_RESULT
+        content:
+          type: string
+          description: Nội dung thông báo.
+          example: Đã tìm thấy tài xế cho chuyến đi.
+          minLength: 1
+          maxLength: 500
+        read:
+          type: boolean
+          description: Thông báo đã được đọc hay chưa.
+          example: false
+        createdAt:
+          type: string
+          description: Thời điểm tạo thông báo.
+          example: '2026-09-24T10:06:10+07:00'
+          format: date-time
+      required:
+      - id
+      - eventType
+      - content
+      - read
+      - createdAt
+    NotificationUpdateRequest:
+      type: object
+      description: Đánh dấu trạng thái đọc của thông báo.
+      properties:
+        read:
+          type: boolean
+          description: Trạng thái đọc; pilot chỉ hỗ trợ đánh dấu đã đọc.
+          example: true
+          enum:
+          - true
+      required:
+      - read
+    RatingCreateRequest:
+      type: object
+      description: Đánh giá tài xế trong 7 ngày kể từ khi chuyến hoàn thành.
+      properties:
+        score:
+          type: integer
+          description: Điểm đánh giá nguyên từ 1 đến 5.
+          example: 5
+          format: int32
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          description: Nhận xét tùy chọn.
+          example: Tài xế thân thiện và đúng giờ.
+          maxLength: 500
+          nullable: true
+      required:
+      - score
+    RatingResponse:
+      type: object
+      description: Đánh giá đã ghi nhận.
+      properties:
+        id:
+          type: string
+          description: Định danh đánh giá.
+          example: e50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        tripId:
+          type: string
+          description: Định danh chuyến.
+          example: a50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        driverId:
+          type: string
+          description: Định danh tài xế được đánh giá.
+          example: 750e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        score:
+          type: integer
+          description: Điểm đánh giá.
+          example: 5
+          format: int32
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          description: Nhận xét.
+          example: Tài xế thân thiện và đúng giờ.
+          maxLength: 500
+          nullable: true
+        createdAt:
+          type: string
+          description: Thời điểm đánh giá.
+          example: '2026-09-24T10:40:00+07:00'
+          format: date-time
+      required:
+      - id
+      - tripId
+      - driverId
+      - score
+      - createdAt
+    OperationDriverUpdateRequest:
+      type: object
+      description: Thay đổi trạng thái hồ sơ tài xế bởi vận hành.
+      properties:
+        status:
+          type: string
+          description: Trạng thái mới của tài xế.
+          example: SUSPENDED
+          enum:
+          - ACTIVE
+          - SUSPENDED
+      required:
+      - status
+    RoleUpdateRequest:
+      type: object
+      description: Cấp hoặc thu hồi vai trò vận hành.
+      properties:
+        role:
+          type: string
+          description: Vai trò quản trị được phép cấu hình.
+          example: OPERATOR
+          enum:
+          - OPERATOR
+          - EXECUTIVE
+      required:
+      - role
+    FareTableCreateRequest:
+      type: object
+      description: Bảng giá có phiên bản cho một loại xe.
+      properties:
+        version:
+          type: string
+          description: Phiên bản bảng giá duy nhất.
+          example: fare-2026-02
+          minLength: 1
+          maxLength: 50
+        vehicleType:
+          type: string
+          description: Loại xe áp dụng.
+          example: MOTORCYCLE
+          enum:
+          - MOTORCYCLE
+          - CAR_4
+        openingFare:
+          type: number
+          description: Giá mở cửa bằng VND.
+          example: 10000
+          format: double
+          minimum: 0
+        includedKm:
+          type: number
+          description: Số km đã gồm trong giá mở cửa.
+          example: 2
+          format: double
+          minimum: 0
+          maximum: 100
+        perKmFare:
+          type: number
+          description: Đơn giá cho mỗi km tiếp theo.
+          example: 4000
+          format: double
+          minimum: 0
+        effectiveFrom:
+          type: string
+          description: Thời điểm bảng giá có hiệu lực.
+          example: '2026-10-01T00:00:00+07:00'
+          format: date-time
+      required:
+      - version
+      - vehicleType
+      - openingFare
+      - includedKm
+      - perKmFare
+      - effectiveFrom
+    FareTableResponse:
+      type: object
+      description: Bảng giá đã được cấu hình.
+      properties:
+        id:
+          type: string
+          description: Định danh bảng giá.
+          example: f50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        version:
+          type: string
+          description: Phiên bản bảng giá.
+          example: fare-2026-02
+          minLength: 1
+          maxLength: 50
+        vehicleType:
+          type: string
+          description: Loại xe áp dụng.
+          example: MOTORCYCLE
+          enum:
+          - MOTORCYCLE
+          - CAR_4
+        openingFare:
+          type: number
+          description: Giá mở cửa bằng VND.
+          example: 10000
+          format: double
+          minimum: 0
+        includedKm:
+          type: number
+          description: Số km đã gồm trong giá mở cửa.
+          example: 2
+          format: double
+          minimum: 0
+        perKmFare:
+          type: number
+          description: Đơn giá mỗi km tiếp theo.
+          example: 4000
+          format: double
+          minimum: 0
+        effectiveFrom:
+          type: string
+          description: Thời điểm có hiệu lực.
+          example: '2026-10-01T00:00:00+07:00'
+          format: date-time
+      required:
+      - id
+      - version
+      - vehicleType
+      - openingFare
+      - includedKm
+      - perKmFare
+      - effectiveFrom
+    IncidentCreateRequest:
+      type: object
+      description: Báo cáo sự cố từ khách hàng hoặc tài xế.
+      properties:
+        reason:
+          type: string
+          description: Nhóm nguyên nhân sự cố.
+          example: ROUTE
+          enum:
+          - ROUTE
+          - DRIVER
+          - PASSENGER
+          - OTHER
+        note:
+          type: string
+          description: Mô tả bổ sung.
+          example: Tuyến đường bị chặn do thi công.
+          maxLength: 500
+          nullable: true
+      required:
+      - reason
+    IncidentUpdateRequest:
+      type: object
+      description: Kết quả xử lý sự cố bởi vận hành.
+      properties:
+        status:
+          type: string
+          description: Trạng thái xử lý mới.
+          example: RESOLVED
+          enum:
+          - OPEN
+          - IN_REVIEW
+          - RESOLVED
+          - CANCELLED
+        resolution:
+          type: string
+          description: Ghi chú kết quả xử lý.
+          example: Đã xác minh và hỗ trợ hai bên.
+          minLength: 1
+          maxLength: 1000
+      required:
+      - status
+      - resolution
+    IncidentResponse:
+      type: object
+      description: Sự cố gắn với chuyến đi.
+      properties:
+        id:
+          type: string
+          description: Định danh sự cố.
+          example: 115e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        tripId:
+          type: string
+          description: Định danh chuyến liên quan.
+          example: a50e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          pattern: ^[0-9a-fA-F-]{36}$
+        reportedBy:
+          type: string
+          description: Vai trò người báo cáo.
+          example: CUSTOMER
+          enum:
+          - CUSTOMER
+          - DRIVER
+          - OPERATOR
+        reason:
+          type: string
+          description: Nhóm nguyên nhân.
+          example: ROUTE
+          enum:
+          - ROUTE
+          - DRIVER
+          - PASSENGER
+          - OTHER
+        note:
+          type: string
+          description: Mô tả bổ sung.
+          example: Tuyến đường bị chặn do thi công.
+          maxLength: 500
+          nullable: true
+        status:
+          type: string
+          description: Trạng thái xử lý.
+          example: OPEN
+          enum:
+          - OPEN
+          - IN_REVIEW
+          - RESOLVED
+          - CANCELLED
+        createdAt:
+          type: string
+          description: Thời điểm ghi nhận.
+          example: '2026-09-24T10:20:00+07:00'
+          format: date-time
+      required:
+      - id
+      - tripId
+      - reportedBy
+      - reason
+      - status
+      - createdAt
+    OperationsReportResponse:
+      type: object
+      description: Chỉ số vận hành tổng hợp theo múi giờ Asia/Ho_Chi_Minh.
+      properties:
+        from:
+          type: string
+          description: Mốc bắt đầu, bao gồm.
+          example: '2026-09-01T00:00:00+07:00'
+          format: date-time
+        to:
+          type: string
+          description: Mốc kết thúc, không bao gồm.
+          example: '2026-10-01T00:00:00+07:00'
+          format: date-time
+        groupBy:
+          type: string
+          description: Đơn vị tổng hợp.
+          example: DAY
+          enum:
+          - DAY
+          - MONTH
+        totalTrips:
+          type: integer
+          description: Tổng số chuyến.
+          example: 1250
+          format: int64
+          minimum: 0
+        completedTrips:
+          type: integer
+          description: Số chuyến hoàn thành.
+          example: 1100
+          format: int64
+          minimum: 0
+        cancelledTrips:
+          type: integer
+          description: Số chuyến hủy.
+          example: 90
+          format: int64
+          minimum: 0
+        revenue:
+          type: number
+          description: Tổng doanh thu VND.
+          example: 48250000
+          format: double
+          minimum: 0
+        completionRate:
+          type: number
+          description: Tỷ lệ hoàn thành; null/N/A khi mẫu số bằng 0.
+          example: 0.88
+          format: double
+          minimum: 0
+          maximum: 1
+          nullable: true
+        driverEfficiency:
+          type: number
+          description: Hiệu suất tài xế; null/N/A khi mẫu số bằng 0.
+          example: 0.76
+          format: double
+          minimum: 0
+          maximum: 1
+          nullable: true
+      required:
+      - from
+      - to
+      - groupBy
+      - totalTrips
+      - completedTrips
+      - cancelledTrips
+      - revenue
+    PaginatedRideOfferResponse:
+      allOf:
+      - $ref: '#/components/schemas/PaginatedResponse'
+      - type: object
+        description: Phản hồi phân trang của RideOfferResponse.
+        properties:
+          data:
+            type: array
+            description: Danh sách kết quả của trang.
+            items:
+              $ref: '#/components/schemas/RideOfferResponse'
+            example: []
+    PaginatedNotificationResponse:
+      allOf:
+      - $ref: '#/components/schemas/PaginatedResponse'
+      - type: object
+        description: Phản hồi phân trang của NotificationResponse.
+        properties:
+          data:
+            type: array
+            description: Danh sách kết quả của trang.
+            items:
+              $ref: '#/components/schemas/NotificationResponse'
+            example: []
+    PaginatedTripResponse:
+      allOf:
+      - $ref: '#/components/schemas/PaginatedResponse'
+      - type: object
+        description: Phản hồi phân trang của TripResponse.
+        properties:
+          data:
+            type: array
+            description: Danh sách kết quả của trang.
+            items:
+              $ref: '#/components/schemas/TripResponse'
+            example: []
+    PaginatedDriverResponse:
+      allOf:
+      - $ref: '#/components/schemas/PaginatedResponse'
+      - type: object
+        description: Phản hồi phân trang của DriverResponse.
+        properties:
+          data:
+            type: array
+            description: Danh sách kết quả của trang.
+            items:
+              $ref: '#/components/schemas/DriverResponse'
+            example: []
+    PaginatedIncidentResponse:
+      allOf:
+      - $ref: '#/components/schemas/PaginatedResponse'
+      - type: object
+        description: Phản hồi phân trang của IncidentResponse.
+        properties:
+          data:
+            type: array
+            description: Danh sách kết quả của trang.
+            items:
+              $ref: '#/components/schemas/IncidentResponse'
+            example: []
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      description: Định danh UUID của tài nguyên trong đường dẫn.
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F-]{36}$
+        example: a50e8400-e29b-41d4-a716-446655440000
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Số trang, bắt đầu từ 1.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 1000
+        default: 1
+        example: 1
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Số phần tử mỗi trang.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+    From:
+      name: from
+      in: query
+      required: false
+      description: Thời điểm bắt đầu (bao gồm); khoảng truy vấn tối đa 366 ngày.
+      schema:
+        type: string
+        format: date-time
+        example: '2026-09-01T00:00:00+07:00'
+    To:
+      name: to
+      in: query
+      required: false
+      description: Thời điểm kết thúc (không bao gồm); khoảng truy vấn tối đa 366 ngày.
+      schema:
+        type: string
+        format: date-time
+        example: '2026-10-01T00:00:00+07:00'
+    GroupBy:
+      name: groupBy
+      in: query
+      required: true
+      description: Đơn vị tổng hợp báo cáo.
+      schema:
+        type: string
+        enum:
+        - DAY
+        - MONTH
+        example: DAY
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID chống xử lý lặp, lưu 24 giờ; cùng khóa khác payload trả 409.
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F-]{36}$
+        example: 225e8400-e29b-41d4-a716-446655440000
+    ProviderSignature:
+      name: X-Provider-Signature
+      in: header
+      required: true
+      description: Chữ ký hoặc shared secret của nhà cung cấp sandbox.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 512
+        example: sha256=sandbox-signature
+  responses:
+    BadRequest:
+      description: Yêu cầu sai cú pháp hoặc schema.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: VALIDATION_ERROR
+            message: Dữ liệu yêu cầu không hợp lệ.
+            details: []
+            requestId: req_01J8QH8Y7W
+    Unauthorized:
+      description: Thiếu hoặc sai thông tin xác thực.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: UNAUTHORIZED
+            message: Cần xác thực để tiếp tục.
+            details: []
+            requestId: req_01J8QH8Y7W
+    Forbidden:
+      description: Vai trò không có quyền thực hiện.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: FORBIDDEN
+            message: Bạn không có quyền thực hiện thao tác này.
+            details: []
+            requestId: req_01J8QH8Y7W
+    NotFound:
+      description: Không tìm thấy tài nguyên hoặc tài nguyên không thuộc người dùng.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: NOT_FOUND
+            message: Không tìm thấy tài nguyên.
+            details: []
+            requestId: req_01J8QH8Y7W
+    Conflict:
+      description: Xung đột trạng thái hoặc khóa idempotency.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: STATE_CONFLICT
+            message: Trạng thái hiện tại không cho phép thao tác.
+            details: []
+            requestId: req_01J8QH8Y7W
+    UnprocessableEntity:
+      description: Dữ liệu đúng schema nhưng vi phạm quy tắc nghiệp vụ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: BUSINESS_RULE_VIOLATION
+            message: Yêu cầu vi phạm quy tắc nghiệp vụ.
+            details: []
+            requestId: req_01J8QH8Y7W
+    TooManyRequests:
+      description: Vượt giới hạn tần suất.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: RATE_LIMIT_EXCEEDED
+            message: Vui lòng thử lại sau.
+            details: []
+            requestId: req_01J8QH8Y7W
+    InternalServerError:
+      description: Lỗi nội bộ không mong đợi.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: INTERNAL_ERROR
+            message: Đã xảy ra lỗi nội bộ.
+            details: []
+            requestId: req_01J8QH8Y7W
+    BadGateway:
+      description: Dịch vụ phụ thuộc trả lỗi hoặc không sẵn sàng.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: DEPENDENCY_ERROR
+            message: Không thể kết nối dịch vụ phụ thuộc.
+            details: []
+            requestId: req_01J8QH8Y7W
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token có thời hạn 30 phút. Không truyền token qua URL.

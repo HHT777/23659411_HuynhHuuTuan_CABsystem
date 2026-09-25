@@ -1,0 +1,59 @@
+type: object
+description: Sự cố gắn với chuyến đi.
+properties:
+  id:
+    type: string
+    description: Định danh sự cố.
+    example: 115e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  tripId:
+    type: string
+    description: Định danh chuyến liên quan.
+    example: a50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  reportedBy:
+    type: string
+    description: Vai trò người báo cáo.
+    example: CUSTOMER
+    enum:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
+  reason:
+    type: string
+    description: Nhóm nguyên nhân.
+    example: ROUTE
+    enum:
+    - ROUTE
+    - DRIVER
+    - PASSENGER
+    - OTHER
+  note:
+    type: string
+    description: Mô tả bổ sung.
+    example: Tuyến đường bị chặn do thi công.
+    maxLength: 500
+    nullable: true
+  status:
+    type: string
+    description: Trạng thái xử lý.
+    example: OPEN
+    enum:
+    - OPEN
+    - IN_REVIEW
+    - RESOLVED
+    - CANCELLED
+  createdAt:
+    type: string
+    description: Thời điểm ghi nhận.
+    example: '2026-09-24T10:20:00+07:00'
+    format: date-time
+required:
+- id
+- tripId
+- reportedBy
+- reason
+- status
+- createdAt

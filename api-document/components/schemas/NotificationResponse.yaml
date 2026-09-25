@@ -1,0 +1,42 @@
+type: object
+description: Thông báo in-app của người nhận.
+properties:
+  id:
+    type: string
+    description: Định danh thông báo.
+    example: d50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  eventType:
+    type: string
+    description: Loại sự kiện nghiệp vụ.
+    example: DRIVER_ASSIGNED
+    enum:
+    - REQUEST_RECEIVED
+    - DRIVER_ASSIGNED
+    - DRIVER_ARRIVED
+    - TRIP_COMPLETED
+    - TRIP_CANCELLED
+    - NO_DRIVER_FOUND
+    - PAYMENT_RESULT
+  content:
+    type: string
+    description: Nội dung thông báo.
+    example: Đã tìm thấy tài xế cho chuyến đi.
+    minLength: 1
+    maxLength: 500
+  read:
+    type: boolean
+    description: Thông báo đã được đọc hay chưa.
+    example: false
+  createdAt:
+    type: string
+    description: Thời điểm tạo thông báo.
+    example: '2026-09-24T10:06:10+07:00'
+    format: date-time
+required:
+- id
+- eventType
+- content
+- read
+- createdAt

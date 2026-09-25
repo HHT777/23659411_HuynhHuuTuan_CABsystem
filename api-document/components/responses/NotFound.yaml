@@ -1,0 +1,10 @@
+description: Không tìm thấy tài nguyên hoặc tài nguyên không thuộc người dùng.
+content:
+  application/json:
+    schema:
+      $ref: ../schemas/ErrorResponse.yaml
+    example:
+      code: NOT_FOUND
+      message: Không tìm thấy tài nguyên.
+      details: []
+      requestId: req_01J8QH8Y7W

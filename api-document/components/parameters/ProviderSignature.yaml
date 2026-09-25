@@ -1,0 +1,9 @@
+name: X-Provider-Signature
+in: header
+required: true
+description: Chữ ký hoặc shared secret của nhà cung cấp sandbox.
+schema:
+  type: string
+  minLength: 16
+  maxLength: 512
+  example: sha256=sandbox-signature

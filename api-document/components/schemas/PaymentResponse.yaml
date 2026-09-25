@@ -1,0 +1,55 @@
+type: object
+description: Kết quả thanh toán không chứa dữ liệu thẻ hoặc tài khoản nhạy cảm.
+properties:
+  id:
+    type: string
+    description: Định danh thanh toán.
+    example: c50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  tripId:
+    type: string
+    description: Định danh chuyến.
+    example: a50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  method:
+    type: string
+    description: Phương thức thanh toán.
+    example: ELECTRONIC
+    enum:
+    - CASH
+    - ELECTRONIC
+  status:
+    type: string
+    description: Trạng thái thanh toán.
+    example: PAID
+    enum:
+    - PENDING
+    - PAID
+    - FAILED
+    - UNKNOWN
+  amount:
+    type: number
+    description: Số tiền thanh toán bằng VND.
+    example: 42000
+    format: double
+    minimum: 0
+  providerReference:
+    type: string
+    description: Mã tham chiếu sandbox của nhà cung cấp.
+    example: sandbox_txn_123
+    maxLength: 100
+    nullable: true
+  updatedAt:
+    type: string
+    description: Thời điểm cập nhật gần nhất.
+    example: '2026-09-24T10:38:00+07:00'
+    format: date-time
+required:
+- id
+- tripId
+- method
+- status
+- amount
+- updatedAt

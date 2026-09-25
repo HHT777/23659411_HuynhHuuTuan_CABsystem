@@ -1,0 +1,21 @@
+type: object
+description: Kết quả xử lý sự cố bởi vận hành.
+properties:
+  status:
+    type: string
+    description: Trạng thái xử lý mới.
+    example: RESOLVED
+    enum:
+    - OPEN
+    - IN_REVIEW
+    - RESOLVED
+    - CANCELLED
+  resolution:
+    type: string
+    description: Ghi chú kết quả xử lý.
+    example: Đã xác minh và hỗ trợ hai bên.
+    minLength: 1
+    maxLength: 1000
+required:
+- status
+- resolution

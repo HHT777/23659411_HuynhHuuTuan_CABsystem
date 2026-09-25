@@ -1,0 +1,18 @@
+type: object
+description: Chi tiết lỗi tại một trường dữ liệu.
+properties:
+  field:
+    type: string
+    description: Tên trường gây lỗi.
+    example: phone
+    minLength: 1
+    maxLength: 100
+  reason:
+    type: string
+    description: Nguyên nhân trường không hợp lệ.
+    example: Số điện thoại đã tồn tại.
+    minLength: 1
+    maxLength: 500
+required:
+- field
+- reason

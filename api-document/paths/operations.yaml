@@ -1,0 +1,145 @@
+/api/v1/operations/drivers:
+  get:
+    tags:
+    - Operations and Incident Support
+    operationId: listDriversForOperations
+    summary: Danh sách tài xế vận hành
+    description: Vận hành tra cứu trạng thái hồ sơ, phương tiện và khả dụng của tài xế.
+    x-srs-ref: UC-16; FR-31..FR-33; BRULE-12; BRULE-13
+    x-roles:
+    - OPERATOR
+    - ADMIN
+    responses:
+      '200':
+        description: Danh sách tài xế.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/PaginatedDriverResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/Page.yaml
+    - $ref: ../components/parameters/Size.yaml
+/api/v1/operations/drivers/{id}:
+  patch:
+    tags:
+    - Operations and Incident Support
+    operationId: updateDriverForOperations
+    summary: Cập nhật trạng thái tài xế
+    description: Vận hành khóa hoặc kích hoạt hồ sơ tài xế theo quyền; thay đổi được audit.
+    x-srs-ref: UC-16; FR-31..FR-35; BRULE-12..BRULE-14
+    x-roles:
+    - OPERATOR
+    - ADMIN
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/DriverResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/OperationDriverUpdateRequest.yaml
+          example:
+            status: SUSPENDED
+/api/v1/operations/incidents:
+  get:
+    tags:
+    - Operations and Incident Support
+    operationId: listIncidentsForOperations
+    summary: Danh sách sự cố
+    description: Vận hành xem hàng đợi sự cố để hỗ trợ và xử lý.
+    x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
+    x-roles:
+    - OPERATOR
+    - ADMIN
+    responses:
+      '200':
+        description: Danh sách sự cố.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/PaginatedIncidentResponse.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/Page.yaml
+    - $ref: ../components/parameters/Size.yaml
+/api/v1/operations/incidents/{id}:
+  patch:
+    tags:
+    - Operations and Incident Support
+    operationId: updateIncidentForOperations
+    summary: Xử lý sự cố
+    description: Cập nhật trạng thái và kết quả xử lý; thao tác phải được audit.
+    x-srs-ref: UC-17; FR-34; FR-35; BRULE-12..BRULE-14
+    x-roles:
+    - OPERATOR
+    - ADMIN
+    responses:
+      '200':
+        description: Sự cố đã cập nhật.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/IncidentResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/IncidentUpdateRequest.yaml
+          example:
+            status: RESOLVED
+            resolution: Đã xác minh và hỗ trợ hai bên.

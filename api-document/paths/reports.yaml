@@ -1,67 +1,35 @@
-/reports/operations:
+/api/v1/reports/operations:
   get:
-    tags: [Reports]
-    summary: Báo cáo hoạt động và hiệu quả tài xế (UC-18)
+    tags:
+    - Reporting
     operationId: getOperationsReport
-    security:
-      - bearerAuth: []
-    parameters:
-      - name: from
-        in: query
-        required: true
-        schema:
-          type: string
-          format: date
-      - name: to
-        in: query
-        required: true
-        schema:
-          type: string
-          format: date
+    summary: Báo cáo vận hành
+    description: Tổng hợp chuyến, doanh thu, tỷ lệ hoàn thành/hủy và hiệu suất tài xế theo Asia/Ho_Chi_Minh; mẫu số 0 trả
+      null/N/A.
+    x-srs-ref: UC-18; FR-36..FR-38; NFR-01..NFR-03
+    x-roles:
+    - EXECUTIVE
+    - ADMIN
     responses:
-      "200":
-        description: Báo cáo hoạt động.
+      '200':
+        description: Báo cáo vận hành.
         content:
           application/json:
             schema:
-              $ref: "../openapi.yaml#/components/schemas/OperationsReport"
-      "403":
-        description: Chỉ operator hoặc lãnh đạo được xem báo cáo.
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
-
-/reports/revenue:
-  get:
-    tags: [Reports]
-    summary: Báo cáo doanh thu (UC-18)
-    operationId: getRevenueReport
-    security:
-      - bearerAuth: []
+              $ref: ../components/schemas/OperationsReportResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '429':
+        $ref: ../components/responses/TooManyRequests.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
     parameters:
-      - name: from
-        in: query
-        required: true
-        schema:
-          type: string
-          format: date
-      - name: to
-        in: query
-        required: true
-        schema:
-          type: string
-          format: date
-    responses:
-      "200":
-        description: Báo cáo doanh thu.
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/RevenueReport"
-      "403":
-        description: Không có quyền xem báo cáo.
-        content:
-          application/json:
-            schema:
-              $ref: "../openapi.yaml#/components/schemas/Error"
+    - $ref: ../components/parameters/From.yaml
+    - $ref: ../components/parameters/To.yaml
+    - $ref: ../components/parameters/GroupBy.yaml

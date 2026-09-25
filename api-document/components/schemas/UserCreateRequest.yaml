@@ -1,0 +1,27 @@
+type: object
+description: Thông tin đăng ký khách hàng.
+properties:
+  phone:
+    type: string
+    description: Số điện thoại duy nhất của tài khoản.
+    example: '+84901234567'
+    minLength: 9
+    maxLength: 15
+    pattern: ^\+?[0-9]{9,15}$
+  name:
+    type: string
+    description: Tên hiển thị của khách hàng.
+    example: Nguyễn Văn An
+    minLength: 2
+    maxLength: 100
+  password:
+    type: string
+    description: Mật khẩu tài khoản; không được ghi log.
+    example: Cab@123456
+    format: password
+    minLength: 8
+    maxLength: 72
+required:
+- phone
+- name
+- password

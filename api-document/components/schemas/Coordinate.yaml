@@ -1,0 +1,27 @@
+type: object
+description: Tọa độ WGS84.
+properties:
+  latitude:
+    type: number
+    description: Vĩ độ WGS84.
+    example: 10.7769
+    format: double
+    minimum: -90
+    maximum: 90
+  longitude:
+    type: number
+    description: Kinh độ WGS84.
+    example: 106.7009
+    format: double
+    minimum: -180
+    maximum: 180
+  address:
+    type: string
+    description: Địa chỉ hiển thị.
+    example: 1 Lê Duẩn, Quận 1, TP.HCM
+    minLength: 1
+    maxLength: 255
+required:
+- latitude
+- longitude
+- address

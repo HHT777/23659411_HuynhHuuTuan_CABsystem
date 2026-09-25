@@ -1,0 +1,85 @@
+/api/v1/admin/roles/{id}:
+  patch:
+    tags:
+    - Operations and Incident Support
+    operationId: updateAdministrativeRole
+    summary: Cập nhật vai trò quản trị
+    description: Quản trị viên cấp hoặc thu hồi vai trò vận hành/báo cáo; thao tác được audit.
+    x-srs-ref: UC-16; FR-31; FR-35; BRULE-12..BRULE-14
+    x-roles:
+    - ADMIN
+    responses:
+      '200':
+        description: Thành công.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/UserResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '404':
+        $ref: ../components/responses/NotFound.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    parameters:
+    - $ref: ../components/parameters/ResourceId.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/RoleUpdateRequest.yaml
+          example:
+            role: OPERATOR
+/api/v1/admin/fares:
+  post:
+    tags:
+    - Operations and Incident Support
+    operationId: createFareTable
+    summary: Tạo bảng giá
+    description: Quản trị viên tạo phiên bản bảng giá; phiên bản được lưu cùng yêu cầu chuyến và thao tác được audit.
+    x-srs-ref: UC-16; FR-35; BRULE-08; BRULE-09; BRULE-14
+    x-roles:
+    - ADMIN
+    responses:
+      '201':
+        description: Bảng giá đã tạo.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas/FareTableResponse.yaml
+      '400':
+        $ref: ../components/responses/BadRequest.yaml
+      '401':
+        $ref: ../components/responses/Unauthorized.yaml
+      '403':
+        $ref: ../components/responses/Forbidden.yaml
+      '409':
+        $ref: ../components/responses/Conflict.yaml
+      '422':
+        $ref: ../components/responses/UnprocessableEntity.yaml
+      '500':
+        $ref: ../components/responses/InternalServerError.yaml
+    requestBody:
+      required: true
+      description: Dữ liệu yêu cầu.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/FareTableCreateRequest.yaml
+          example:
+            version: fare-2026-02
+            vehicleType: MOTORCYCLE
+            openingFare: 10000
+            includedKm: 2
+            perKmFare: 4000
+            effectiveFrom: '2026-10-01T00:00:00+07:00'

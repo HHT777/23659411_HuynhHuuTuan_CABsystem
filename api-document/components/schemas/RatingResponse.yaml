@@ -1,0 +1,45 @@
+type: object
+description: Đánh giá đã ghi nhận.
+properties:
+  id:
+    type: string
+    description: Định danh đánh giá.
+    example: e50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  tripId:
+    type: string
+    description: Định danh chuyến.
+    example: a50e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  driverId:
+    type: string
+    description: Định danh tài xế được đánh giá.
+    example: 750e8400-e29b-41d4-a716-446655440000
+    format: uuid
+    pattern: ^[0-9a-fA-F-]{36}$
+  score:
+    type: integer
+    description: Điểm đánh giá.
+    example: 5
+    format: int32
+    minimum: 1
+    maximum: 5
+  comment:
+    type: string
+    description: Nhận xét.
+    example: Tài xế thân thiện và đúng giờ.
+    maxLength: 500
+    nullable: true
+  createdAt:
+    type: string
+    description: Thời điểm đánh giá.
+    example: '2026-09-24T10:40:00+07:00'
+    format: date-time
+required:
+- id
+- tripId
+- driverId
+- score
+- createdAt

@@ -1,0 +1,9 @@
+# Các file bạn yêu cầu loại trừ
+cus.md
+swagger.html
+swagger.png
+swagger-ui.png 
+
+# Các file log và cấu hình editor (khuyên dùng để giữ Git sạch)
+.vscode/
+debug.log

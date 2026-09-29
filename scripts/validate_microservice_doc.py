@@ -201,10 +201,42 @@ def main() -> int:
     structural=[]
     for token in ("GET /health","GET /ready","GET /health/services",".gitignore",".env.example","Idempotency-Key","429","bán kính 1 km"):
         if token not in doc: structural.append(f"missing {token}")
-    compose=section(doc,"```yaml\nservices:","```\n\nKhởi động")
+    compose_block=section(doc,"```yaml\nservices:").split("\n```",1)[0]
+    compose=compose_block.removeprefix("```yaml\n")
     if compose.count("ports:")!=1: structural.append(f"compose ports declarations={compose.count('ports:')}, expected 1")
     containers=re.findall(r"^\| `([^`]+)` \|",table_block(doc,"| Container | Image/build |"),re.M)
     if len(containers)!=8: structural.append(f"container rows={len(containers)}, expected 8")
+    compose_data=yaml.safe_load(compose)
+    if len(compose_data.get("services",{}))!=8: structural.append("compose must define exactly 8 services")
+    compose_vars=set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)\}",compose))
+    env_doc=section(doc,"### 0.2.","### 0.3.")
+    documented_vars=set(re.findall(r"`([A-Z][A-Z0-9_]*)`",env_doc))
+    missing_env=compose_vars-documented_vars
+    if missing_env: structural.append(f"compose substitutions absent from .env.example: {sorted(missing_env)}")
+    required_service_env={
+        "api-gateway":{"JWT_PUBLIC_KEY_PATH","INTERNAL_SERVICE_TOKEN"},
+        "identity-driver-service":{"JWT_PRIVATE_KEY_PATH","JWT_PUBLIC_KEY_PATH","FIELD_ENCRYPTION_KEY","INTERNAL_SERVICE_TOKEN"},
+        "ride-service":{"JWT_PUBLIC_KEY_PATH","FIELD_ENCRYPTION_KEY","INTERNAL_SERVICE_TOKEN"},
+        "billing-service":{"JWT_PUBLIC_KEY_PATH","PAYMENT_CALLBACK_SECRET","INTERNAL_SERVICE_TOKEN"},
+        "notification-service":{"JWT_PUBLIC_KEY_PATH","INTERNAL_SERVICE_TOKEN"},
+        "operations-reporting-service":{"JWT_PUBLIC_KEY_PATH","FIELD_ENCRYPTION_KEY","INTERNAL_SERVICE_TOKEN"},
+    }
+    for service,required in required_service_env.items():
+        actual=set(compose_data["services"][service].get("environment",{}))
+        if required-actual: structural.append(f"{service} missing env {sorted(required-actual)}")
+    for token in (
+        "CREATE UNIQUE INDEX uq_searching_ride_request_customer",
+        "CREATE TABLE active_trip_projections",
+        "CREATE TABLE processed_events",
+        "transaction_timestamp() < expires_at",
+        "R->>B: POST internal fare-estimates",
+        "R -->|RideAssigned; TripStatusChanged| ID",
+        "ID -->|DriverApplicationDecided| N",
+        "gatewayBaseUrl=http://localhost:8080",
+        "apiBaseUrl={{gatewayBaseUrl}}/api/v1",
+    ):
+        if token not in doc: structural.append(f"missing {token}")
+    if "N -->|delivery metrics| O" in doc: structural.append("stale Notification delivery-metrics context-map edge")
     ok &= report("infrastructure acceptance markers",structural)
 
     placeholders=[]

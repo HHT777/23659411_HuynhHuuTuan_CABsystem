@@ -33,13 +33,14 @@ flowchart LR
   O[BC-05 Operations & Reporting]
 
   ID -->|candidate/snapshot REST; DriverLocationUpdated| R
+  R -->|RideAssigned; TripStatusChanged| ID
   R -->|TripCompleted; Fare query ACL| B
   R -->|Ride/Offer/Trip events| N
   B -->|FareFinalized; PaymentStatusChanged| N
+  ID -->|DriverApplicationDecided| N
   ID -->|AuditRecorded| O
   R -->|AuditRecorded; TripStatusChanged| O
   B -->|AuditRecorded; payment projection| O
-  N -->|delivery metrics| O
   O -->|idempotent incident command REST| R
   O -->|idempotent fare review REST| B
   O -->|IncidentResolved| N
@@ -122,18 +123,16 @@ volumes/
 
 | Biến | Ví dụ giả | Service dùng |
 | --- | --- | --- |
+| `POSTGRES_PASSWORD` | `change-postgres-admin-password` | Container PostgreSQL/bootstrap |
+| `IDENTITY_DB_PASSWORD`, `RIDE_DB_PASSWORD` | `change-identity-db-password`, `change-ride-db-password` | Compose tạo role và dựng DB URL cho Identity/Ride |
+| `BILLING_DB_PASSWORD`, `NOTIFICATION_DB_PASSWORD`, `OPERATIONS_DB_PASSWORD` | `change-billing-db-password`, `change-notification-db-password`, `change-operations-db-password` | Compose tạo role và dựng DB URL cho ba service |
+| `RABBITMQ_PASSWORD` | `change-rabbitmq-password` | Compose dựng `RABBITMQ_URL` cho mọi service |
 | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `/run/secrets/jwt_private.pem`, `/run/secrets/jwt_public.pem` | Identity ký; Gateway/service kiểm chữ ký |
-| `FIELD_ENCRYPTION_KEY`, `FIELD_KEY_VERSION` | `base64-demo-not-a-real-key`, `v1` | Identity & Driver |
-| `IDENTITY_DB_URL` | `postgresql://cab_identity:demo@postgres:5432/cab_identity_db` | Identity & Driver |
-| `RIDE_DB_URL` | `postgresql://cab_ride:demo@postgres:5432/cab_ride_db` | Ride |
-| `BILLING_DB_URL` | `postgresql://cab_billing:demo@postgres:5432/cab_billing_db` | Billing |
-| `NOTIFICATION_DB_URL` | `postgresql://cab_notification:demo@postgres:5432/cab_notification_db` | Notification |
-| `OPERATIONS_DB_URL` | `postgresql://cab_operations:demo@postgres:5432/cab_operations_db` | Operations & Reporting |
-| `RABBITMQ_URL` | `amqp://cab:demo@rabbitmq:5672/cab` | Mọi service |
+| `FIELD_ENCRYPTION_KEY`, `FIELD_KEY_VERSION` | `base64-demo-not-a-real-key`, `v1` | Identity, Ride và Operations; pilot dùng chung khóa, production nên tách khóa/service |
 | `PAYMENT_CALLBACK_SECRET` | `demo-rotate-before-use` | Billing mock adapter |
 | `INTERNAL_SERVICE_TOKEN` | `demo-internal-token` | REST nội bộ trong pilot |
 
-CI phải kiểm tra `.env` không được Git track, `.env.example` có mặt, secret scan không báo khóa thật. Nếu secret từng bị commit: thu hồi/xoay khóa ngay, cập nhật secret store, xóa khỏi lịch sử bằng `git filter-repo`, force-push có phối hợp và buộc đăng nhập lại; chỉ xóa file ở commit mới là chưa đủ.
+`*_DB_URL` và `RABBITMQ_URL` là biến runtime do Compose dựng từ các password trên, không phải biến đầu vào bị khai báo trùng trong `.env.example`. Hai file PEM nằm ở `infra/secrets/` cục bộ (đã bị `.gitignore` loại trừ) và được mount read-only. CI phải kiểm tra `.env` không được Git track, `.env.example` có mặt, secret scan không báo khóa thật. Nếu secret từng bị commit: thu hồi/xoay khóa ngay, cập nhật secret store, xóa khỏi lịch sử bằng `git filter-repo`, force-push có phối hợp và buộc đăng nhập lại; chỉ xóa file ở commit mới là chưa đủ.
 
 ### 0.3. API Gateway — Phiếu #3 và #8
 
@@ -224,10 +223,13 @@ sequenceDiagram
   participant G as Gateway
   participant R as Ride
   participant I as IdentityDriver
+  participant B as Billing
   participant Q as RabbitMQ
   participant N as Notification
   C->>G: POST /ride-requests
   G->>R: JWT + Idempotency-Key
+  R->>B: POST internal fare-estimates
+  B-->>R: quotedFareVnd + priceVersionId
   R->>R: commit RideRequest + outbox
   R-->>C: 201 SEARCHING
   R->>I: GET internal nearby candidates (sync)
@@ -260,6 +262,16 @@ services:
       context: ./gateway
     ports:
       - "8080:8080"
+    environment:
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      IDENTITY_SERVICE_URL: http://identity-driver-service:8081
+      RIDE_SERVICE_URL: http://ride-service:8082
+      BILLING_SERVICE_URL: http://billing-service:8083
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
+      OPERATIONS_SERVICE_URL: http://operations-reporting-service:8085
+    volumes:
+      - ./infra/secrets/jwt_public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     networks:
       - cab-internal
     depends_on:
@@ -285,6 +297,14 @@ services:
     environment:
       IDENTITY_DB_URL: postgresql://cab_identity:${IDENTITY_DB_PASSWORD}@postgres:5432/cab_identity_db
       RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      FIELD_KEY_VERSION: ${FIELD_KEY_VERSION}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+    volumes:
+      - ./infra/secrets/jwt_private.pem:${JWT_PRIVATE_KEY_PATH}:ro
+      - ./infra/secrets/jwt_public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     expose:
       - "8081"
     networks:
@@ -306,6 +326,12 @@ services:
     environment:
       RIDE_DB_URL: postgresql://cab_ride:${RIDE_DB_PASSWORD}@postgres:5432/cab_ride_db
       RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      FIELD_KEY_VERSION: ${FIELD_KEY_VERSION}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+    volumes:
+      - ./infra/secrets/jwt_public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     expose:
       - "8082"
     networks:
@@ -327,6 +353,11 @@ services:
     environment:
       BILLING_DB_URL: postgresql://cab_billing:${BILLING_DB_PASSWORD}@postgres:5432/cab_billing_db
       RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+    volumes:
+      - ./infra/secrets/jwt_public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     expose:
       - "8083"
     networks:
@@ -348,6 +379,10 @@ services:
     environment:
       NOTIFICATION_DB_URL: postgresql://cab_notification:${NOTIFICATION_DB_PASSWORD}@postgres:5432/cab_notification_db
       RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+    volumes:
+      - ./infra/secrets/jwt_public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     expose:
       - "8084"
     networks:
@@ -369,6 +404,12 @@ services:
     environment:
       OPERATIONS_DB_URL: postgresql://cab_operations:${OPERATIONS_DB_PASSWORD}@postgres:5432/cab_operations_db
       RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      FIELD_KEY_VERSION: ${FIELD_KEY_VERSION}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+    volumes:
+      - ./infra/secrets/jwt_public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     expose:
       - "8085"
     networks:
@@ -530,7 +571,7 @@ stateDiagram-v2
 - Health nội bộ: `GET /health`, `GET /ready`.
 - API sở hữu: API-01–API-10.
 - Aggregate root: `User`, `DriverApplication`, `Vehicle`, `Availability`, `DriverLocation`.
-- Phát: `DriverApplicationDecided.v1`, `DriverLocationUpdated.v1`, `AuditRecorded.v1`.
+- Phát: `DriverApplicationDecided.v1`, `DriverLocationUpdated.v1`, `AuditRecorded.v1`. Để giảm tải outbox, `DriverLocationUpdated.v1` chỉ phát khi request location có `tripId` khác null; Ride vẫn lấy candidate hiện tại qua REST.
 - Tiêu thụ: `RideAssigned.v1`, `TripStatusChanged.v1` để cập nhật projection Availability.ON_TRIP; không bảo vệ invariant Trip và không sửa Trip.
 - REST ra ngoài: Ride internal query candidate/driver snapshot gọi vào BC này; BC này không gọi database khác.
 - Quyền: Public cho API-01/02/03; Authenticated cho API-04; CUSTOMER/DRIVER cho API-05; DRIVER cho API-06/07; ADMIN API-08; OPERATOR API-09/10.
@@ -666,7 +707,7 @@ Database `cab_identity_db`, user `cab_identity`. Quan hệ User–Profile–Vehi
 
 ##### 5.2. Mô hình vật lý
 
-Các bảng chính: `users`, `customer_profiles`, `driver_profiles`, `vehicles`, `driver_locations`, `driver_applications`, `driver_documents`, `availabilities`, `vehicle_types`, `refresh_tokens`, `login_attempts`, `idempotency_records`, `outbox_events`. PK UUID; index unique trên blind index phone/plate; `(driver_id, received_at DESC)` cho location; `(status, received_at)` cho application.
+Các bảng chính: `users`, `customer_profiles`, `driver_profiles`, `vehicles`, `driver_locations`, `driver_applications`, `driver_documents`, `availabilities`, `vehicle_types`, `refresh_tokens`, `login_attempts`, `idempotency_records`, `processed_events`, `outbox_events`. PK UUID; index unique trên blind index phone/plate; `(driver_id, received_at DESC)` cho location; `(status, received_at)` cho application.
 
 Mọi field logic ở Bước 4 ánh xạ sang cột `snake_case` cùng tên trong bảng của entity. Ngoại lệ vật lý: `User.phone`, `CustomerProfile.fullName`, `DriverProfile.fullName`, `Vehicle.plate`, `DriverDocument.fileKey/maskedValue` được tách thành `*_ciphertext`; các cột `*_nonce`, `*_key_version`, `*_blind_index` là cột kỹ thuật chỉ phục vụ mã hóa/tìm duy nhất. `DriverLocation` có thêm read model `driver_current_locations`; `IdempotencyRecord` có thêm `state`; `OutboxEvent` dùng các cột kỹ thuật retry/publish. Không field logic nào bị loại bỏ bởi các biểu diễn vật lý này.
 
@@ -723,6 +764,11 @@ CREATE TABLE idempotency_records (
   expires_at timestamptz NOT NULL,
   PRIMARY KEY (subject_id, key)
 );
+CREATE TABLE processed_events (
+  event_id uuid PRIMARY KEY,
+  event_type varchar(100) NOT NULL,
+  processed_at timestamptz NOT NULL
+);
 ```
 
 Truy vấn phiếu #13 lọc bounding box quanh `10.776889,106.700806`, sau đó tính Haversine trong SQL và giữ `distance_meters<=1000`, sắp `(distanceMeters,driverId)`, lấy `limit+1` với `limit≤100`. Cursor là cặp cuối, ổn định hơn offset. `driver_current_locations` phục vụ truy vấn mới nhất; `driver_locations` giữ lịch sử ENT-07 để cộng quãng đường. Job xóa OTP/idempotency hết hạn; LoginAttempt được query trực tiếp trong cửa sổ 15 phút.
@@ -734,7 +780,7 @@ Bảo vệ: password dùng Argon2id có salt; định dạng minh họa, không 
 | User, CustomerProfile, DriverProfile, Vehicle | `users`, `customer_profiles`, `driver_profiles`, `vehicles` |
 | DriverLocation, Availability, VehicleType | `driver_locations` + `driver_current_locations`, `availabilities`, `vehicle_types` |
 | DriverApplication, DriverDocument | `driver_applications`, `driver_documents` |
-| IdempotencyRecord, RefreshToken, LoginAttempt | `idempotency_records`, `refresh_tokens`, `login_attempts` |
+| IdempotencyRecord, RefreshToken, LoginAttempt | `idempotency_records`, `refresh_tokens`, `login_attempts`; `processed_events` là bảng kỹ thuật dedupe event consumer. |
 | RateLimitCounter | Không có bảng vật lý; Gateway một instance giữ bộ đếm trong bộ nhớ theo contract ENT-27. |
 | OtpChallenge (`⚠ Giả định`) | `otp_challenges`; entity bổ sung theo phiếu #21, không thuộc danh mục entity chuẩn. |
 
@@ -823,10 +869,10 @@ stateDiagram-v2
 | Trip.id | id | Y | Y | ENT-06. |
 | Trip.rideRequestId | id | Y | Y | Một Trip tối đa cho RideRequest. |
 | Trip.driverId | id | Y | N | `ref → BC-01`. |
-| Trip.driverFullNameSnapshot | text(120) | Y | N | Snapshot BC-01 lúc ACCEPT. |
-| Trip.driverPlateSnapshot | text(15) | Y | N | Snapshot BC-01 lúc ACCEPT. |
-| Trip.driverVehicleTypeSnapshot | text(30) | Y | N | Snapshot BC-01 lúc ACCEPT. |
-| Trip.driverRatingAverageSnapshot | số thực | N | N | Snapshot BC-01 lúc ACCEPT. |
+| Trip.driverFullNameSnapshot | text(120) | Y | N | `⚠ Giả định`: snapshot BC-01 lúc ACCEPT để đáp ứng API-16. |
+| Trip.driverPlateSnapshot | text(15) | Y | N | `⚠ Giả định`: snapshot BC-01 lúc ACCEPT để đáp ứng API-16. |
+| Trip.driverVehicleTypeSnapshot | text(30) | Y | N | `⚠ Giả định`: snapshot BC-01 lúc ACCEPT để đáp ứng API-16. |
+| Trip.driverRatingAverageSnapshot | số thực | N | N | `⚠ Giả định`: snapshot BC-01 lúc ACCEPT để đáp ứng API-16. |
 | Trip.status | enum | Y | N | Không lùi trạng thái. |
 | Trip.distanceMeters | số nguyên | N | N | Không âm. |
 | Trip.distanceSource | enum | N | N | GPS/OPERATOR_ESTIMATE. |
@@ -869,9 +915,9 @@ Database `cab_ride_db`, user `cab_ride`. ACCEPT cạnh tranh, version/state tran
 
 ##### 5.2. Mô hình vật lý
 
-`ride_requests`, `ride_offers`, `trips`, `ratings`, `status_history`, `idempotency_records`, `outbox_events`. Index: partial unique customer request mở; partial unique driver offer PENDING; `(ride_request_id,status,expires_at)`; `(customer_id,status)`; `(driver_id,status)`.
+`ride_requests`, `ride_offers`, `trips`, `ratings`, `status_history`, `idempotency_records`, `processed_events`, `outbox_events`. Index: partial unique customer request SEARCHING; partial unique driver offer PENDING; `(ride_request_id,status,expires_at)`; `(customer_id,status)`; `(driver_id,status)`.
 
-Mọi field logic ánh xạ sang cột `snake_case` cùng tên; `pickup` và `destination` tách thành cặp `*_lat/*_lng`. Các cột `search_started_at`, `state` của idempotency và metadata retry/publish của outbox là cột kỹ thuật. Bốn snapshot tài xế đều nằm trong `trips`; tên và biển số dùng `*_ciphertext`, còn `*_nonce`, `*_key_version` chỉ là metadata mã hóa vật lý.
+Mọi field logic ánh xạ sang cột `snake_case` cùng tên; `pickup` và `destination` tách thành cặp `*_lat/*_lng`. Các cột `search_started_at`, `state` của idempotency, `processed_events` và metadata retry/publish của outbox là cấu trúc kỹ thuật. Bốn snapshot tài xế đều nằm trong `trips`; tên và biển số dùng `*_ciphertext`, còn `*_nonce`, `*_key_version` chỉ là metadata mã hóa vật lý. Compose truyền khóa mã hóa pilot cho Ride; Customer chỉ nhận bản rõ qua API-16 sau kiểm tra ownership.
 
 ```sql
 CREATE TABLE ride_requests (
@@ -888,6 +934,8 @@ CREATE TABLE ride_requests (
   status varchar(24) NOT NULL CHECK (status IN ('SEARCHING','ASSIGNED','NO_DRIVER_FOUND','CANCELLED')),
   version integer NOT NULL CHECK (version > 0)
 );
+CREATE UNIQUE INDEX uq_searching_ride_request_customer
+  ON ride_requests(customer_id) WHERE status='SEARCHING';
 CREATE TABLE ride_offers (
   id uuid PRIMARY KEY,
   ride_request_id uuid NOT NULL REFERENCES ride_requests(id),
@@ -941,9 +989,14 @@ CREATE TABLE idempotency_records (
   expires_at timestamptz NOT NULL,
   PRIMARY KEY (subject_id, key)
 );
+CREATE TABLE processed_events (
+  event_id uuid PRIMARY KEY,
+  event_type varchar(100) NOT NULL,
+  processed_at timestamptz NOT NULL
+);
 ```
 
-Scheduler mỗi giây chọn offer hết hạn bằng `WHERE status='PENDING' AND expires_at<=now() FOR UPDATE SKIP LOCKED`; elapsed điều phối lấy từ `ride_requests.search_started_at`, nên restart vẫn tiếp tục đúng mốc 160/180 giây. Partial unique offer PENDING chặn lời mời thứ hai; bảng `idempotency_records` giữ response 24 giờ và được job dọn định kỳ.
+ACCEPT tự khóa hàng RideOffer/RideRequest và kiểm `status='PENDING' AND transaction_timestamp() < expires_at` ngay trong transaction; nếu điều kiện sai thì trả 410 và tuyệt đối không tạo Trip. Scheduler mỗi giây chỉ dọn hàng hết hạn bằng `WHERE status='PENDING' AND expires_at<=now() FOR UPDATE SKIP LOCKED`, không quyết định tính hợp lệ của ACCEPT. Elapsed điều phối lấy từ `ride_requests.search_started_at`, nên restart vẫn tiếp tục đúng mốc 160/180 giây. Partial unique request SEARCHING và offer PENDING chặn bản ghi cạnh tranh tương ứng; invariant customer không có Trip mở còn được transaction tạo request kiểm tra qua projection/Trip hiện hành. `idempotency_records` giữ response 24 giờ và được job dọn định kỳ.
 
 Mọi query parameterized; DB role chỉ có quyền `cab_ride_db`. Dữ liệu ID không chứa secret; comment rating là user content, lưu nguyên văn và escape khi xuất HTML.
 
@@ -1075,9 +1128,9 @@ Database `cab_billing_db`, user `cab_billing`. Fare/Payment 1–1 Trip, số ti�
 
 ##### 5.2. Mô hình vật lý
 
-`price_versions`, `fares`, `payments`, `payment_attempts`, `idempotency_records`, `provider_events`, `outbox_events`. Unique `fares.trip_id`, `payments.trip_id`, `payment_attempts.provider_ref`; index `(payment_id,status)` và `(status,effective_at)`.
+`price_versions`, `fares`, `payments`, `payment_attempts`, `idempotency_records`, `provider_events`, `processed_events`, `outbox_events`. Unique `fares.trip_id`, `payments.trip_id`, `payment_attempts.provider_ref`; index `(payment_id,status)` và `(status,effective_at)`.
 
-Mọi field logic ánh xạ sang cột `snake_case` cùng tên. `provider_events`, `state` của idempotency và metadata retry/publish của outbox là cấu trúc kỹ thuật, không thay thế field nghiệp vụ.
+Mọi field logic ánh xạ sang cột `snake_case` cùng tên. `provider_events`, `processed_events`, `state` của idempotency và metadata retry/publish của outbox là cấu trúc kỹ thuật, không thay thế field nghiệp vụ.
 
 ```sql
 CREATE TABLE price_versions (
@@ -1128,6 +1181,11 @@ CREATE TABLE idempotency_records (
   response jsonb,
   expires_at timestamptz NOT NULL,
   PRIMARY KEY (subject_id, key)
+);
+CREATE TABLE processed_events (
+  event_id uuid PRIMARY KEY,
+  event_type varchar(100) NOT NULL,
+  processed_at timestamptz NOT NULL
 );
 ```
 
@@ -1248,6 +1306,8 @@ VALUES ('550e8400-e29b-41d4-a716-446655440000','550e8400-e29b-41d4-a716-44665544
 
 Cursor `(createdAt,id)`, `size≤100`; không xóa inbox theo TTL vì retention production chưa chốt. Registry SSE nằm trong bộ nhớ notification-service. Last-Event-ID ánh xạ tới cursor và query các hàng mới hơn. Query dùng parameter binding/allow-list sort; nội dung resource trả JSON, web client escape text và CSP chặn inline script.
 
+Notification không cần bảng `processed_events` riêng: `UNIQUE(recipient_id,event_id)` chính là khóa dedupe side effect của từng consumer-recipient; insert trùng được ack mà không phát SSE lần hai.
+
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
 | Notification | bảng `notifications`; connection SSE chỉ là trạng thái bộ nhớ tiến trình |
@@ -1356,14 +1416,16 @@ Database `cab_operations_db`, user `cab_operations`. Incident theo version, audi
 
 `incidents`, `audit_logs`, `report_projections`, `active_trip_projections`, `processed_events`, `outbox_events`. Scheduler chống trùng Incident SYSTEM bằng idempotency key suy ra từ `(trip_id, threshold_type)` trong `processed_events`; unique `audit_record_id`, `source_event_id`; index `(status,created_at)`, GIN dimensions, `(metric_date)`.
 
-Mọi field Incident, AuditLog và ReportProjection ánh xạ sang cột `snake_case` cùng tên. `AuditRecord` là payload nguồn: `id` ánh xạ `audit_record_id`, còn `eventId/actorId/action/targetId/beforeAfter` nằm trong `masked_record`; `OutboxEvent` ánh xạ trực tiếp vào `outbox_events`. `active_trip_projections`, `processed_events`, `created_at` của Incident và metadata retry/publish của outbox là cấu trúc kỹ thuật vật lý.
+Mọi field Incident, AuditLog và ReportProjection ánh xạ sang cột `snake_case` cùng tên, ngoại trừ `Incident.reason` được tách thành ba cột mã hóa nêu dưới. `AuditRecord` là payload nguồn: `id` ánh xạ `audit_record_id`, còn `eventId/actorId/action/targetId/beforeAfter` nằm trong `masked_record`; `OutboxEvent` ánh xạ trực tiếp vào `outbox_events`. `active_trip_projections`, `processed_events`, `created_at` của Incident và metadata retry/publish của outbox là cấu trúc kỹ thuật vật lý.
 
 ```sql
 CREATE TABLE incidents (
   id uuid PRIMARY KEY,
   trip_id uuid NOT NULL,
   source varchar(12) NOT NULL CHECK (source IN ('CUSTOMER','DRIVER','OPERATOR','SYSTEM')),
-  reason varchar(500) NOT NULL,
+  reason_ciphertext bytea NOT NULL,
+  reason_nonce bytea NOT NULL,
+  reason_key_version text NOT NULL,
   status varchar(16) NOT NULL CHECK (status IN ('OPEN','IN_PROGRESS','RESOLVED','CLOSED')),
   resolution varchar(24),
   version integer NOT NULL CHECK (version > 0),
@@ -1382,6 +1444,21 @@ CREATE TABLE report_projections (
   metrics jsonb NOT NULL,
   source_event_id uuid NOT NULL UNIQUE
 );
+CREATE TABLE active_trip_projections (
+  trip_id uuid PRIMARY KEY,
+  customer_id uuid NOT NULL,
+  driver_id uuid NOT NULL,
+  status varchar(32) NOT NULL,
+  assigned_at timestamptz NOT NULL,
+  status_changed_at timestamptz NOT NULL,
+  last_event_id uuid NOT NULL,
+  version integer NOT NULL CHECK (version > 0)
+);
+CREATE TABLE processed_events (
+  event_id uuid PRIMARY KEY,
+  event_type varchar(100) NOT NULL,
+  processed_at timestamptz NOT NULL
+);
 CREATE TABLE outbox_events (
   id uuid PRIMARY KEY,
   aggregate_id uuid NOT NULL,
@@ -1392,7 +1469,7 @@ CREATE TABLE outbox_events (
 );
 ```
 
-Reason/beforeAfter có thể chứa dữ liệu cá nhân: validate/mask tại nguồn, trường cần đọc lại mã hóa AES-256-GCM với keyVersion; không ghi token/phone đầy đủ. Query báo cáo dùng binding, allow-list `groupBy`, kỳ tối đa 366 ngày; DB role read/write đúng schema này.
+Reason/beforeAfter có thể chứa dữ liệu cá nhân: validate/mask tại nguồn; `Incident.reason` ánh xạ thành `reason_ciphertext/reason_nonce/reason_key_version` dùng AES-256-GCM và khóa pilot được truyền cho Operations qua Compose. Không ghi token/phone đầy đủ. Query báo cáo dùng binding, allow-list `groupBy`, kỳ tối đa 366 ngày; DB role read/write đúng schema này.
 
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
@@ -1421,13 +1498,13 @@ Reason/beforeAfter có thể chứa dữ liệu cá nhân: validate/mask tại n
 
 | BC | Microservice | Database | API sở hữu | UC sở hữu | Số entity |
 | --- | --- | --- | --- | --- | ---: |
-| BC-01 Identity & Driver | `identity-driver-service` | `cab_identity_db` (PostgreSQL) | API-01–10; API-X04–06, X08–12 | UC-01.1, 01.2, 02, 03.1, 03.2, 04, 08, 16.2, 16.3, 16.5, 16.6 | 13 |
+| BC-01 Identity & Driver | `identity-driver-service` | `cab_identity_db` (PostgreSQL) | API-01–10; API-X04–06, X08–12 | UC-01.1, 01.2, 02, 03.1, 03.2, 04, 08, 16.2, 16.3, 16.5, 16.6 | 14* |
 | BC-02 Ride | `ride-service` | `cab_ride_db` (PostgreSQL) | API-11–17; API-X07 | UC-05.1, 05.2, 06.1–06.3, 07.1–07.2, 09.1–09.2, 10, 14, 15 | 5 |
 | BC-03 Billing | `billing-service` | `cab_billing_db` (PostgreSQL) | API-18–23 | UC-11, 11.2, 12.1–12.4, 16.4 | 4 |
 | BC-04 Notification | `notification-service` | `cab_notification_db` (PostgreSQL) | API-24–26 | UC-13.1–13.3 | 1 |
 | BC-05 Operations & Reporting | `operations-reporting-service` | `cab_operations_db` (PostgreSQL) | API-27–30; API-X01–03 | UC-16.1, 16.7, 17.1–17.3, 18.1–18.2 | 5 |
 
-Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm database nằm trên một container PostgreSQL. RabbitMQ là broker, không phải database nghiệp vụ.
+`*` BC-01 có 13 entity chuẩn trong SRS và một entity `OtpChallenge` gắn `⚠ Giả định`. Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm database nằm trên một container PostgreSQL. RabbitMQ là broker, không phải database nghiệp vụ.
 
 ### III.2. Hợp đồng event
 
@@ -1436,7 +1513,7 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm d
 | Event v1 | Producer | Consumer → queue | Payload chính | Khóa/dedupe | Xử lý lỗi |
 | --- | --- | --- | --- | --- | --- |
 | `DriverApplicationDecided.v1` | BC-01 | BC-04 → `identity.notification`; BC-05 → `identity.operations` | eventId, applicationId, driverId, status, version | eventId | retry/DLQ từng queue |
-| `DriverLocationUpdated.v1` | BC-01 | BC-02 → `identity.ride-location`; BC-05 → `identity.operations` | eventId, driverId, lat, lng, receivedAt, tripId | eventId; driverId+receivedAt | Bỏ event cũ; retry/DLQ |
+| `DriverLocationUpdated.v1` | BC-01 | BC-02 → `identity.ride-location`; BC-05 → `identity.operations` | eventId, driverId, lat, lng, receivedAt, tripId; chỉ phát khi tripId khác null | eventId; driverId+receivedAt | Bỏ event cũ; retry/DLQ |
 | `RideRequested.v1` | BC-02 | BC-04 → `ride.notification`; BC-05 → `ride.operations` | eventId, rideRequestId, vehicleTypeId, pickup, occurredAt | eventId | retry/DLQ |
 | `RideOfferCreated.v1` | BC-02 | BC-04 → `ride.notification` | eventId, offerId, driverId, expiresAt | eventId+recipientId | retry 1/5/25 giây rồi DLQ |
 | `RideAssigned.v1` | BC-02 | BC-01 → `ride.identity-state`; BC-04 → `ride.notification`; BC-05 → `ride.operations` | eventId, tripId, customerId, driverId, version | eventId; tripId+version | retry/DLQ |
@@ -1453,7 +1530,7 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm d
 ### III.3. Ranh giới giao dịch và xử lý thất bại
 
 - Trong service: aggregate + StatusHistory/outbox/idempotency record commit cùng transaction. Giữa service: RabbitMQ at-least-once, eventual consistency, không distributed transaction.
-- Offer hết hạn: scheduler mỗi giây khóa các hàng `ride_offers` hết hạn bằng `FOR UPDATE SKIP LOCKED`; nếu vẫn PENDING thì EXPIRED, phát event và chọn vòng mới. ACCEPT đến 20.001 giây trả 410; đúng 20.000 giây chỉ thắng nếu commit trước expiry transition.
+- Offer hết hạn: transaction ACCEPT tự khóa offer/request và chỉ hợp lệ khi `transaction_timestamp() < expires_at`; tại hoặc sau `expires_at` trả 410 dù scheduler chưa quét. Scheduler mỗi giây chỉ cleanup các hàng `status='PENDING' AND expires_at<=now()` bằng `FOR UPDATE SKIP LOCKED`, chuyển EXPIRED, phát event và chọn vòng mới. Vì vậy scheduler trễ tối đa khoảng một giây không kéo dài cửa sổ ACCEPT.
 - Callback thanh toán trễ: providerEventId dedupe; UNKNOWN giữ chặn; callback SUCCEEDED đến sau timeout được áp dụng một lần. Payment đã SUCCEEDED không bị downgrade.
 - Driver hủy sau nhận: trước PICKED_UP Trip→CANCELLED, không tự matching lại; từ PICKED_UP dùng Incident, có thể TERMINATED_BY_INCIDENT và Fare review.
 - Notification/Billing down không rollback RideRequest; outbox tồn và publisher gửi lại sau phục hồi.
@@ -1570,7 +1647,7 @@ Customer `20000000-0000-4000-8000-000000000001`, phone `+84901234567`, có năm 
 7. Customer API-17 score 5/comment; gọi lần hai cùng Trip với key khác phải 409 vì một Rating/Trip.
 8. Chạy negative collection #24–30 và health #6; dùng Postman Runner để lặp rate test.
 
-Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `driverToken`, `operatorToken`, `adminToken`, `customerId`, `driverId`, `rideRequestId`, `offerId`, `tripId`, `fareId`, `paymentId`, `notificationId`, `incidentId`, `idempotencyKey`. Phân trang chuẩn API baseline dùng `page` mặc định 1, `size` mặc định 20/tối đa 100; API-X06 dùng cursor vì dữ liệu vị trí thay đổi nhanh.
+Biến environment: `gatewayBaseUrl=http://localhost:8080` cho `/health`, `/ready`; `apiBaseUrl={{gatewayBaseUrl}}/api/v1` cho API nghiệp vụ; `customerToken`, `driverToken`, `operatorToken`, `adminToken`, `customerId`, `driverId`, `rideRequestId`, `offerId`, `tripId`, `fareId`, `paymentId`, `notificationId`, `incidentId`, `idempotencyKey`. Phân trang chuẩn API baseline dùng `page` mặc định 1, `size` mặc định 20/tối đa 100; API-X06 dùng cursor vì dữ liệu vị trí thay đổi nhanh.
 
 ## Phần VI. Ma trận phiếu chấm — 30 mục
 
@@ -1633,6 +1710,7 @@ Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `dr
 6. API-X10–X12: list/detail/decision DriverApplication; actor chuẩn là OPERATOR dù phiếu gọi Admin.
 7. JWT dùng RS256, access 15 phút, refresh opaque 30 ngày; khi khóa User, refresh bị thu hồi nhưng access đã phát có thể sống tối đa 15 phút. SRS chưa chốt thuật toán, TTL hay yêu cầu thu hồi tức thời; pilot chấp nhận đánh đổi này.
 8. ENT-23, ENT-24 là pattern cục bộ nhiều service nhưng cần một chủ schema để ma trận không trùng; lần lượt BC-01 và BC-05 quản trị contract. ENT-27 là contract BC-01, còn Gateway giữ bộ đếm trong bộ nhớ và không tạo bảng vật lý.
+9. Bốn field snapshot tên hiển thị, biển số, loại xe và rating của tài xế được bổ sung vào Trip tại thời điểm ACCEPT để API-16 không phụ thuộc BC-01 khi đọc; SRS cho phép Customer xem thông tin này nhưng chưa khai báo chúng là field ENT-06.
 
 ### VIII.2. API bổ sung cần cập nhật SRS
 

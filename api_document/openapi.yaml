@@ -1,0 +1,3051 @@
+openapi: 3.0.3
+info:
+  title: CAB System API
+  version: 0.1.0-pilot
+  description: API cho CAB System — đồ án 7 tuần. Baseline theo DEC-01–38 trong SRS.
+servers:
+- url: https://api.cab-system.local/api/v1
+  description: Pilot environment (mock)
+tags:
+- name: Identity&Driver
+- name: Ride
+- name: Billing
+- name: Notification
+- name: Operations&Reporting
+paths:
+  /auth/register:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: registerCustomer
+      summary: Đăng ký khách hàng
+      description: 'UC-01.1. Tiền điều kiện: phone chưa tồn tại. Hậu điều kiện thành công: Tạo User CUSTOMER ACTIVE và CustomerProfile.'
+      x-api-id: API-01
+      x-uc: UC-01.1
+      x-roles:
+      - Public
+      x-fr:
+      - FR-01
+      - FR-49
+      x-dec:
+      - DEC-29
+      - DEC-33
+      x-brule:
+      - BRULE-01
+      x-idempotency: key
+      x-rate-limit: 10/min/IP
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              phone: '+84901234567'
+              password: CabPilot2026
+              fullName: Nguyễn Minh An
+      responses:
+        '201':
+          description: Tạo User CUSTOMER ACTIVE và CustomerProfile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/driver-registrations:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: registerDriver
+      summary: Đăng ký tài xế
+      description: 'UC-01.2. Tiền điều kiện: phone chưa tồn tại. Hậu điều kiện thành công: Tạo hồ sơ PENDING_REVIEW/OFFLINE.'
+      x-api-id: API-02
+      x-uc: UC-01.2
+      x-roles:
+      - Public
+      x-fr:
+      - FR-02
+      - FR-49
+      x-dec:
+      - DEC-02
+      - DEC-25
+      - DEC-33
+      x-brule:
+      - BRULE-02
+      x-idempotency: key
+      x-rate-limit: 10/min/IP
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverRegistrationRequest'
+            example:
+              phone: '+84909876543'
+              password: Driver2026
+              fullName: Trần Văn Bình
+              vehicleTypeId: 550e8400-e29b-41d4-a716-446655440010
+              plate: 59A1-12345
+              documents:
+              - type: GPLX
+                fileKey: private/gplx-2026.pdf
+                maskedValue: '******1234'
+      responses:
+        '201':
+          description: Tạo hồ sơ PENDING_REVIEW/OFFLINE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverApplication'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/login:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: login
+      summary: Đăng nhập
+      description: 'UC-02. Tiền điều kiện: tài khoản ACTIVE, chưa bị khóa đăng nhập. Hậu điều kiện thành công: Cấp access/refresh
+        token.'
+      x-api-id: API-03
+      x-uc: UC-02
+      x-roles:
+      - Public
+      x-fr: &id001
+      - FR-04
+      - FR-49
+      - FR-50
+      - FR-51
+      x-dec: &id002
+      - DEC-29
+      - DEC-30
+      x-brule: &id003
+      - BRULE-01
+      x-idempotency: none
+      x-rate-limit: 10/min/IP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              phone: '+84901234567'
+              password: CabPilot2026
+      responses:
+        '200':
+          description: Cấp access/refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/refresh:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: refreshToken
+      summary: Đăng nhập
+      description: 'UC-02. Tiền điều kiện: tài khoản ACTIVE, chưa bị khóa đăng nhập. Hậu điều kiện thành công: Cấp access/refresh
+        token.'
+      x-api-id: API-04
+      x-uc: UC-02
+      x-roles:
+      - Authenticated
+      x-fr: *id001
+      x-dec: *id002
+      x-brule: *id003
+      x-idempotency: key
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+            example:
+              refreshToken: refresh-token-pilot-2026-abcdef
+      responses:
+        '200':
+          description: Cấp access/refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /me/profile:
+    patch:
+      tags:
+      - Identity&Driver
+      operationId: updateMyProfile
+      summary: Cập nhật hồ sơ chung
+      description: 'UC-03.1. Tiền điều kiện: đã xác thực, sở hữu hồ sơ. Hậu điều kiện thành công: Lưu profile/version mới.'
+      x-api-id: API-05
+      x-uc: UC-03.1
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr:
+      - FR-05
+      x-dec:
+      - DEC-34
+      x-brule:
+      - BRULE-12
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+            example:
+              fullName: Nguyễn Minh An Updated
+              version: 3
+      responses:
+        '200':
+          description: Lưu profile/version mới
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /drivers/me/availability:
+    put:
+      tags:
+      - Identity&Driver
+      operationId: updateAvailability
+      summary: Cập nhật trạng thái sẵn sàng
+      description: 'UC-04. Tiền điều kiện: User, application, vehicle ACTIVE; không Trip/offer mở. Hậu điều kiện thành công:
+        Availability đổi đúng version.'
+      x-api-id: API-06
+      x-uc: UC-04
+      x-roles:
+      - DRIVER
+      x-fr:
+      - FR-06
+      - FR-47
+      x-dec:
+      - DEC-18
+      - DEC-34
+      x-brule:
+      - BRULE-02
+      - BRULE-04
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityRequest'
+            example:
+              status: ONLINE
+              version: 3
+      responses:
+        '200':
+          description: Availability đổi đúng version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /drivers/me/location:
+    put:
+      tags:
+      - Identity&Driver
+      operationId: updateDriverLocation
+      summary: Cập nhật vị trí tài xế
+      description: 'UC-08. Tiền điều kiện: ONLINE/ON_TRIP; bản tin mới hơn. Hậu điều kiện thành công: Lưu vị trí; cộng distance
+        nếu hợp lệ.'
+      x-api-id: API-07
+      x-uc: UC-08
+      x-roles:
+      - DRIVER
+      x-fr:
+      - FR-21
+      - FR-47
+      - FR-50
+      x-dec:
+      - DEC-18
+      - DEC-22
+      - DEC-30
+      x-brule:
+      - BRULE-04
+      x-idempotency: newer-wins
+      x-rate-limit: 12/min/driver
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationRequest'
+            example:
+              lat: 10.776889
+              lng: 106.700806
+              receivedAt: '2026-09-29T09:15:00+07:00'
+      responses:
+        '200':
+          description: Lưu vị trí; cộng distance nếu hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /operations/internal-users:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: createInternalUser
+      summary: Tạo tài khoản nội bộ
+      description: 'UC-16.6. Tiền điều kiện: ADMIN hợp lệ. Hậu điều kiện thành công: User ACTIVE, mustChangePassword=true.'
+      x-api-id: API-08
+      x-uc: UC-16.6
+      x-roles:
+      - ADMIN
+      x-fr:
+      - FR-45
+      x-dec:
+      - DEC-25
+      - DEC-35
+      x-brule:
+      - BRULE-01
+      - BRULE-12
+      - BRULE-14
+      x-idempotency: key
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternalUserCreate'
+            example:
+              phone: '+84905551234'
+              fullName: Lê Vận Hành
+              role: OPERATOR
+              temporaryPassword: Operator2026
+      responses:
+        '201':
+          description: User ACTIVE, mustChangePassword=true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /operations/accounts/{id}/lock:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: lockAccount
+      summary: Khóa hoặc mở tài khoản
+      description: 'UC-16.5. Tiền điều kiện: target CUSTOMER/DRIVER; có quyền. Hậu điều kiện thành công: Đổi User status,
+        thu hồi token khi khóa, audit.'
+      x-api-id: API-09
+      x-uc: UC-16.5
+      x-roles:
+      - OPERATOR
+      x-fr: &id004
+      - FR-43
+      x-dec: &id005
+      - DEC-26
+      - DEC-34
+      x-brule: &id006
+      - BRULE-12
+      - BRULE-14
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountAction'
+            example:
+              reason: Xác minh yêu cầu hỗ trợ CAB-2026-09
+              version: 3
+      responses:
+        '200':
+          description: Đổi User status, thu hồi token khi khóa, audit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /operations/accounts/{id}/unlock:
+    post:
+      tags:
+      - Identity&Driver
+      operationId: unlockAccount
+      summary: Khóa hoặc mở tài khoản
+      description: 'UC-16.5. Tiền điều kiện: target CUSTOMER/DRIVER; có quyền. Hậu điều kiện thành công: Đổi User status,
+        thu hồi token khi khóa, audit.'
+      x-api-id: API-10
+      x-uc: UC-16.5
+      x-roles:
+      - OPERATOR
+      x-fr: *id004
+      x-dec: *id005
+      x-brule: *id006
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountAction'
+            example:
+              reason: Xác minh yêu cầu hỗ trợ CAB-2026-09
+              version: 3
+      responses:
+        '200':
+          description: Đổi User status, thu hồi token khi khóa, audit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /ride-requests:
+    post:
+      tags:
+      - Ride
+      operationId: createRideRequest
+      summary: Tạo yêu cầu đặt xe
+      description: 'UC-05.1. Tiền điều kiện: đã xác thực; điểm trong vùng; không request/trip mở. Hậu điều kiện thành công:
+        RideRequest SEARCHING và giá ước tính.'
+      x-api-id: API-11
+      x-uc: UC-05.1
+      x-roles:
+      - CUSTOMER
+      x-fr: &id007
+      - FR-07
+      - FR-08
+      - FR-09
+      - FR-40
+      - FR-48
+      - FR-50
+      x-dec: &id008
+      - DEC-19
+      - DEC-23
+      - DEC-34
+      x-brule: &id009
+      - BRULE-03
+      x-idempotency: key
+      x-rate-limit: 5/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideRequestCreate'
+            example:
+              pickup:
+                lat: 10.776889
+                lng: 106.700806
+              destination:
+                lat: 10.781234
+                lng: 106.695321
+              vehicleTypeId: 550e8400-e29b-41d4-a716-446655440010
+      responses:
+        '201':
+          description: RideRequest SEARCHING và giá ước tính
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRequest'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /ride-requests/{id}/cancellation:
+    post:
+      tags:
+      - Ride
+      operationId: cancelRideRequest
+      summary: Hủy yêu cầu tìm tài xế
+      description: 'UC-05.2. Tiền điều kiện: sở hữu request; version đúng. Hậu điều kiện thành công: Request và offer PENDING
+        thành CANCELLED.'
+      x-api-id: API-12
+      x-uc: UC-05.2
+      x-roles:
+      - CUSTOMER
+      x-fr:
+      - FR-08
+      - FR-14
+      - FR-41
+      x-dec:
+      - DEC-34
+      x-brule:
+      - BRULE-03
+      - BRULE-06
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cancellation'
+            example:
+              reason: Đổi kế hoạch
+              version: 3
+      responses:
+        '200':
+          description: Request và offer PENDING thành CANCELLED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRequest'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /ride-offers/{id}/responses:
+    post:
+      tags:
+      - Ride
+      operationId: respondToRideOffer
+      summary: Phản hồi lời mời
+      description: 'UC-07.1/07.2. Tiền điều kiện: Offer PENDING, còn hạn và version đúng. Hậu điều kiện thành công: Ghi nhận
+        ACCEPT/DECLINE theo quy tắc cạnh tranh.'
+      x-api-id: API-13
+      x-uc: UC-07.1/07.2
+      x-roles:
+      - DRIVER
+      x-fr:
+      - FR-13
+      - FR-14
+      x-dec:
+      - DEC-16
+      - DEC-17
+      - DEC-34
+      x-brule:
+      - BRULE-06
+      - BRULE-07
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferDecision'
+            example:
+              decision: ACCEPT
+              version: 3
+      responses:
+        '200':
+          description: Ghi nhận ACCEPT/DECLINE theo quy tắc cạnh tranh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideOffer'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}/status:
+    put:
+      tags:
+      - Ride
+      operationId: updateTripStatus
+      summary: Cập nhật mốc chuyến
+      description: 'UC-09.1. Tiền điều kiện: được giao Trip; version đúng. Hậu điều kiện thành công: Trip/History/event cập
+        nhật nguyên tử.'
+      x-api-id: API-14
+      x-uc: UC-09.1
+      x-roles:
+      - DRIVER
+      x-fr:
+      - FR-17
+      - FR-18
+      - FR-19
+      - FR-20
+      - FR-21
+      - FR-22
+      - FR-41
+      x-dec:
+      - DEC-34
+      x-brule:
+      - BRULE-07
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripStatusUpdate'
+            example:
+              status: ARRIVED_AT_PICKUP
+              version: 3
+      responses:
+        '200':
+          description: Trip/History/event cập nhật nguyên tử
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}/cancellation:
+    post:
+      tags:
+      - Ride
+      operationId: cancelTrip
+      summary: Hủy chuyến trước đón
+      description: 'UC-09.2. Tiền điều kiện: Trip trước PICKED_UP; version đúng. Hậu điều kiện thành công: CANCELLED; không
+        tự điều phối lại.'
+      x-api-id: API-15
+      x-uc: UC-09.2
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr:
+      - FR-22
+      - FR-41
+      - FR-53
+      x-dec:
+      - DEC-20
+      - DEC-21
+      - DEC-34
+      x-brule:
+      - BRULE-07
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cancellation'
+            example:
+              reason: Đổi kế hoạch
+              version: 3
+      responses:
+        '200':
+          description: CANCELLED; không tự điều phối lại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}:
+    get:
+      tags:
+      - Ride
+      operationId: getTrip
+      summary: Theo dõi chuyến
+      description: 'UC-10. Tiền điều kiện: sở hữu Trip. Hậu điều kiện thành công: Trả trạng thái, ETA và dữ liệu tài xế đã
+        lọc.'
+      x-api-id: API-16
+      x-uc: UC-10
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr:
+      - FR-15
+      - FR-18
+      - FR-21
+      - FR-39
+      x-dec:
+      - DEC-13
+      - DEC-24
+      x-brule:
+      - BRULE-07
+      - BRULE-12
+      x-idempotency: none
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Trả trạng thái, ETA và dữ liệu tài xế đã lọc
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}/ratings:
+    post:
+      tags:
+      - Ride
+      operationId: createRating
+      summary: Đánh giá tài xế
+      description: 'UC-15. Tiền điều kiện: Trip COMPLETED của khách, trong 7 ngày. Hậu điều kiện thành công: Tạo một Rating.'
+      x-api-id: API-17
+      x-uc: UC-15
+      x-roles:
+      - CUSTOMER
+      x-fr:
+      - FR-30
+      x-dec:
+      - DEC-34
+      x-brule:
+      - BRULE-15
+      x-idempotency: key
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingCreate'
+            example:
+              score: 5
+              comment: Tài xế lịch sự
+      responses:
+        '201':
+          description: Tạo một Rating
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /fare-estimates:
+    post:
+      tags:
+      - Billing
+      operationId: estimateFare
+      summary: Tạo yêu cầu đặt xe
+      description: 'UC-05.1. Tiền điều kiện: đã xác thực; điểm trong vùng; không request/trip mở. Hậu điều kiện thành công:
+        RideRequest SEARCHING và giá ước tính.'
+      x-api-id: API-18
+      x-uc: UC-05.1
+      x-roles:
+      - CUSTOMER
+      x-fr: *id007
+      x-dec: *id008
+      x-brule: *id009
+      x-idempotency: key
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FareEstimateRequest'
+            example:
+              pickup:
+                lat: 10.776889
+                lng: 106.700806
+              destination:
+                lat: 10.781234
+                lng: 106.695321
+              vehicleTypeId: 550e8400-e29b-41d4-a716-446655440010
+      responses:
+        '200':
+          description: RideRequest SEARCHING và giá ước tính
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FareEstimate'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}/fare:
+    get:
+      tags:
+      - Billing
+      operationId: getTripFare
+      summary: Xem cước chuyến
+      description: 'UC-11. Tiền điều kiện: Trip thuộc actor. Hậu điều kiện thành công: Trả Fare FINALIZED hoặc FARE_REVIEW_REQUIRED.'
+      x-api-id: API-19
+      x-uc: UC-11
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr:
+      - FR-23
+      x-dec:
+      - DEC-06
+      - DEC-22
+      - DEC-23
+      x-brule:
+      - BRULE-08
+      x-idempotency: none
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Trả Fare FINALIZED hoặc FARE_REVIEW_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fare'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /fares/{id}/reviews:
+    post:
+      tags:
+      - Billing
+      operationId: reviewFare
+      summary: Xác minh khoảng cách Fare review
+      description: 'UC-11.2. Tiền điều kiện: Fare FARE_REVIEW_REQUIRED; có quyền/version. Hậu điều kiện thành công: Fare FINALIZED
+        và AuditRecorded.'
+      x-api-id: API-20
+      x-uc: UC-11.2
+      x-roles:
+      - OPERATOR
+      x-fr:
+      - FR-34
+      - FR-44
+      x-dec:
+      - DEC-22
+      - DEC-34
+      x-brule:
+      - BRULE-08
+      - BRULE-12
+      - BRULE-14
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FareReviewRequest'
+            example:
+              distanceMeters: 2001
+              reason: Đã đối chiếu hành trình GPS
+              version: 3
+      responses:
+        '200':
+          description: Fare FINALIZED và AuditRecorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fare'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}/payments:
+    post:
+      tags:
+      - Billing
+      operationId: createPayment
+      summary: Khởi tạo thanh toán điện tử
+      description: 'UC-12.2. Tiền điều kiện: Fare FINALIZED; không PENDING/UNKNOWN/SUCCEEDED. Hậu điều kiện thành công: PaymentAttempt
+        PENDING và paymentUrl giả.'
+      x-api-id: API-21
+      x-uc: UC-12.2
+      x-roles:
+      - CUSTOMER
+      x-fr:
+      - FR-24
+      - FR-25
+      - FR-26
+      - FR-27
+      - FR-54
+      x-dec:
+      - DEC-27
+      - DEC-28
+      - DEC-34
+      x-brule:
+      - BRULE-09
+      - BRULE-10
+      x-idempotency: key
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreate'
+            example:
+              method: SANDBOX
+              sandboxScenario: TIMEOUT_THEN_SUCCESS
+      responses:
+        '201':
+          description: PaymentAttempt PENDING và paymentUrl giả
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /payments/{id}/cash-confirmation:
+    post:
+      tags:
+      - Billing
+      operationId: confirmCashPayment
+      summary: Xác nhận thanh toán tiền mặt
+      description: 'UC-12.1. Tiền điều kiện: được giao Trip; Fare FINALIZED; không attempt chờ. Hậu điều kiện thành công:
+        Payment SUCCEEDED/CASH một lần.'
+      x-api-id: API-22
+      x-uc: UC-12.1
+      x-roles:
+      - DRIVER
+      x-fr:
+      - FR-24
+      - FR-26
+      - FR-54
+      x-dec:
+      - DEC-07
+      - DEC-28
+      - DEC-34
+      x-brule:
+      - BRULE-09
+      - BRULE-10
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashConfirmation'
+            example:
+              received: true
+              version: 3
+      responses:
+        '200':
+          description: Payment SUCCEEDED/CASH một lần
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /payments/provider-callbacks:
+    post:
+      tags:
+      - Billing
+      operationId: handlePaymentCallback
+      summary: Nhận callback thanh toán
+      description: 'UC-12.3. Tiền điều kiện: attempt tồn tại; chữ ký hợp lệ. Hậu điều kiện thành công: Dedupe và lưu trạng
+        thái cuối.'
+      x-api-id: API-23
+      x-uc: UC-12.3
+      x-roles:
+      - Mock Provider
+      x-fr:
+      - FR-25
+      - FR-26
+      - FR-27
+      - FR-54
+      x-dec:
+      - DEC-27
+      - DEC-28
+      x-brule:
+      - BRULE-09
+      - BRULE-10
+      x-idempotency: provider-event
+      x-rate-limit: provider
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/ProviderSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderCallback'
+            example:
+              providerEventId: evt-cab-20260929-001
+              attemptId: 550e8400-e29b-41d4-a716-446655440000
+              status: SUCCEEDED
+              occurredAt: '2026-09-29T09:30:00+07:00'
+      responses:
+        '200':
+          description: Dedupe và lưu trạng thái cuối
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /notifications:
+    get:
+      tags:
+      - Notification
+      operationId: listNotifications
+      summary: Đọc hộp thông báo
+      description: 'UC-13.3. Tiền điều kiện: sở hữu recipientId. Hậu điều kiện thành công: Trả inbox hoặc đánh dấu READ.'
+      x-api-id: API-24
+      x-uc: UC-13.3
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr: &id010
+      - FR-09
+      - FR-15
+      - FR-18
+      - FR-26
+      - FR-41
+      x-dec: &id011
+      - DEC-10
+      - DEC-34
+      x-brule: &id012
+      - BRULE-11
+      - BRULE-12
+      x-idempotency: none
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Trả inbox hoặc đánh dấu READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /notifications/{id}:
+    patch:
+      tags:
+      - Notification
+      operationId: updateNotification
+      summary: Đọc hộp thông báo
+      description: 'UC-13.3. Tiền điều kiện: sở hữu recipientId. Hậu điều kiện thành công: Trả inbox hoặc đánh dấu READ.'
+      x-api-id: API-25
+      x-uc: UC-13.3
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr: *id010
+      x-dec: *id011
+      x-brule: *id012
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPatch'
+            example:
+              read: true
+              version: 3
+      responses:
+        '200':
+          description: Trả inbox hoặc đánh dấu READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /me/events:
+    get:
+      tags:
+      - Notification
+      operationId: streamMyEvents
+      summary: Theo dõi sự kiện SSE
+      description: 'UC-13.2. Tiền điều kiện: đã xác thực. Hậu điều kiện thành công: Nhận event trong 2 giây ở ít nhất 95%
+        mẫu.'
+      x-api-id: API-26
+      x-uc: UC-13.2
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      x-fr:
+      - FR-09
+      - FR-15
+      - FR-18
+      - FR-21
+      x-dec:
+      - DEC-10
+      - DEC-37
+      x-brule:
+      - BRULE-11
+      - BRULE-12
+      x-idempotency: event-id
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/LastEventId'
+      responses:
+        '200':
+          description: Nhận event trong 2 giây ở ít nhất 95% mẫu
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSE'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /operations/trips/active:
+    get:
+      tags:
+      - Operations&Reporting
+      operationId: listActiveTrips
+      summary: Xem chuyến đang diễn ra
+      description: 'UC-16.7. Tiền điều kiện: có permission. Hậu điều kiện thành công: Trả Trip hoạt động, driver, vị trí và
+        tuổi trạng thái.'
+      x-api-id: API-27
+      x-uc: UC-16.7
+      x-roles:
+      - OPERATOR
+      x-fr:
+      - FR-42
+      x-dec:
+      - DEC-31
+      - DEC-32
+      x-brule:
+      - BRULE-12
+      - BRULE-16
+      x-idempotency: none
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/TripStatusFilter'
+      responses:
+        '200':
+          description: Trả Trip hoạt động, driver, vị trí và tuổi trạng thái
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveTripPage'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trips/{id}/incidents:
+    post:
+      tags:
+      - Operations&Reporting
+      operationId: createIncident
+      summary: Báo sự cố chuyến
+      description: 'UC-17.1. Tiền điều kiện: actor thuộc Trip hoặc OPERATOR. Hậu điều kiện thành công: Incident OPEN idempotent.'
+      x-api-id: API-28
+      x-uc: UC-17.1
+      x-roles:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      x-fr:
+      - FR-34
+      - FR-35
+      x-dec:
+      - DEC-15
+      - DEC-34
+      x-brule:
+      - BRULE-14
+      x-idempotency: key
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentCreate'
+            example:
+              reason: Xe gặp sự cố kỹ thuật
+      responses:
+        '201':
+          description: Incident OPEN idempotent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /operations/incidents/{id}:
+    patch:
+      tags:
+      - Operations&Reporting
+      operationId: updateIncident
+      summary: Xử lý sự cố
+      description: 'UC-17.2. Tiền điều kiện: Incident OPEN/IN_PROGRESS; version đúng. Hậu điều kiện thành công: RESOLVED/CLOSED;
+        có thể phát terminate/fare-review.'
+      x-api-id: API-29
+      x-uc: UC-17.2
+      x-roles:
+      - OPERATOR
+      x-fr:
+      - FR-34
+      - FR-35
+      - FR-41
+      - FR-44
+      - FR-55
+      x-dec:
+      - DEC-20
+      - DEC-21
+      - DEC-22
+      - DEC-34
+      x-brule:
+      - BRULE-12
+      - BRULE-14
+      x-idempotency: key+version
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentUpdate'
+            example:
+              status: RESOLVED
+              resolution: CONTINUE_TRIP
+              note: Đã hỗ trợ thay xe
+              version: 3
+      responses:
+        '200':
+          description: RESOLVED/CLOSED; có thể phát terminate/fare-review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /reports/operations:
+    get:
+      tags:
+      - Operations&Reporting
+      operationId: getOperationsReport
+      summary: Xem báo cáo vận hành
+      description: 'UC-18.1/18.2. Tiền điều kiện: kỳ hợp lệ; from bao gồm, to loại trừ. Hậu điều kiện thành công: Trả count,
+        revenue và các tỷ lệ với asOf.'
+      x-api-id: API-30
+      x-uc: UC-18.1/18.2
+      x-roles:
+      - OPERATOR
+      - ADMIN
+      - EXECUTIVE
+      x-fr:
+      - FR-36
+      - FR-37
+      - FR-38
+      - FR-52
+      x-dec:
+      - DEC-31
+      x-brule:
+      - BRULE-16
+      x-idempotency: none
+      x-rate-limit: 100/min/user
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      responses:
+        '200':
+          description: Trả count, revenue và các tỷ lệ với asOf
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                status: ACTIVE
+                version: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      properties:
+        id: &id013
+          type: string
+          format: uuid
+          maxLength: 36
+        phone: &id017
+          type: string
+          pattern: ^\+[1-9][0-9]{7,14}$
+          maxLength: 15
+        passwordHash:
+          type: string
+          maxLength: 255
+          writeOnly: true
+        roles:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - CUSTOMER
+            - DRIVER
+            - OPERATOR
+            - ADMIN
+            - EXECUTIVE
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - LOCKED
+          - DISABLED
+        mustChangePassword:
+          type: boolean
+      required:
+      - id
+      - phone
+      - passwordHash
+      - roles
+      - status
+      - mustChangePassword
+    CustomerProfile:
+      type: object
+      properties:
+        userId: *id013
+        fullName:
+          type: string
+          maxLength: 120
+        createdAt: &id016
+          type: string
+          format: date-time
+      required:
+      - userId
+      - fullName
+      - createdAt
+    DriverProfile:
+      type: object
+      properties:
+        userId: *id013
+        fullName:
+          type: string
+          maxLength: 120
+        ratingAverage:
+          type: number
+          format: float
+          minimum: 1
+          maximum: 5
+          nullable: true
+        version: &id015
+          type: integer
+          minimum: 1
+          example: 3
+      required:
+      - userId
+      - fullName
+      - version
+    Vehicle:
+      type: object
+      properties:
+        id: *id013
+        driverId: *id013
+        vehicleTypeId: *id013
+        plate:
+          type: string
+          maxLength: 15
+        status:
+          type: string
+          enum:
+          - PENDING_REVIEW
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+      required:
+      - id
+      - driverId
+      - vehicleTypeId
+      - plate
+      - status
+    RideRequest:
+      type: object
+      properties:
+        id: *id013
+        customerId: *id013
+        pickup: &id014
+          type: object
+          properties:
+            lat:
+              type: number
+              format: double
+              minimum: -90
+              maximum: 90
+              example: 10.776889
+            lng:
+              type: number
+              format: double
+              minimum: -180
+              maximum: 180
+              example: 106.700806
+          required:
+          - lat
+          - lng
+        destination: *id014
+        vehicleTypeId: *id013
+        quotedFareVnd:
+          type: integer
+          minimum: 0
+          nullable: true
+        priceVersionId:
+          type: string
+          format: uuid
+          nullable: true
+          maxLength: 36
+        status:
+          type: string
+          enum:
+          - SEARCHING
+          - ASSIGNED
+          - NO_DRIVER_FOUND
+          - CANCELLED
+        version: *id015
+      required:
+      - id
+      - customerId
+      - pickup
+      - destination
+      - vehicleTypeId
+      - status
+      - version
+    Trip:
+      type: object
+      properties:
+        id: *id013
+        rideRequestId: *id013
+        driverId: *id013
+        status:
+          type: string
+          enum:
+          - ASSIGNED
+          - ARRIVED_AT_PICKUP
+          - PICKED_UP
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
+          - TERMINATED_BY_INCIDENT
+        distanceMeters:
+          type: integer
+          minimum: 0
+          nullable: true
+        distanceSource:
+          type: string
+          enum:
+          - DRIVER_LOCATIONS
+          - VERIFIED_BY_OPERATOR
+          nullable: true
+        version: *id015
+      required:
+      - id
+      - rideRequestId
+      - driverId
+      - status
+      - version
+    DriverLocation:
+      type: object
+      properties:
+        driverId: *id013
+        lat:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        receivedAt: *id016
+        tripId:
+          type: string
+          format: uuid
+          nullable: true
+          maxLength: 36
+      required:
+      - driverId
+      - lat
+      - lng
+      - receivedAt
+    Fare:
+      type: object
+      properties:
+        id: *id013
+        tripId: *id013
+        priceVersionId: *id013
+        distanceMeters:
+          type: integer
+          minimum: 0
+          nullable: true
+        distanceSource:
+          type: string
+          enum:
+          - DRIVER_LOCATIONS
+          - VERIFIED_BY_OPERATOR
+          nullable: true
+        amountVnd:
+          type: integer
+          minimum: 0
+          nullable: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - FARE_REVIEW_REQUIRED
+          - FINALIZED
+        version: *id015
+      required:
+      - id
+      - tripId
+      - priceVersionId
+      - status
+      - version
+    Payment:
+      type: object
+      properties:
+        id: *id013
+        tripId: *id013
+        method:
+          type: string
+          enum:
+          - CASH
+          - SANDBOX
+        status:
+          type: string
+          enum:
+          - UNPAID
+          - PENDING
+          - SUCCEEDED
+          - FAILED
+          - UNKNOWN
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        version: *id015
+      required:
+      - id
+      - tripId
+      - method
+      - status
+      - version
+    Notification:
+      type: object
+      properties:
+        id: *id013
+        recipientId: *id013
+        eventId: *id013
+        type:
+          type: string
+          maxLength: 64
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - recipientId
+      - eventId
+      - type
+    Rating:
+      type: object
+      properties:
+        id: *id013
+        tripId: *id013
+        customerId: *id013
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 500
+          nullable: true
+      required:
+      - id
+      - tripId
+      - customerId
+      - score
+    AuditRecord:
+      type: object
+      properties:
+        id: *id013
+        eventId: *id013
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+          maxLength: 80
+        targetId: *id013
+        beforeAfter:
+          type: object
+          nullable: true
+          additionalProperties: true
+      required:
+      - id
+      - eventId
+      - action
+      - targetId
+    RideOffer:
+      type: object
+      properties:
+        id: *id013
+        rideRequestId: *id013
+        driverId: *id013
+        expiresAt: *id016
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACCEPTED
+          - DECLINED
+          - EXPIRED
+          - CANCELLED
+        version: *id015
+      required:
+      - id
+      - rideRequestId
+      - driverId
+      - expiresAt
+      - status
+      - version
+    PaymentAttempt:
+      type: object
+      properties:
+        id: *id013
+        paymentId: *id013
+        scenario:
+          type: string
+          enum:
+          - SUCCESS
+          - FAIL
+          - TIMEOUT_THEN_SUCCESS
+          - TIMEOUT_THEN_FAIL
+          - DUPLICATE_CALLBACK
+        providerRef:
+          type: string
+          maxLength: 100
+          nullable: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - SUCCEEDED
+          - FAILED
+          - UNKNOWN
+      required:
+      - id
+      - paymentId
+      - scenario
+      - status
+    StatusHistory:
+      type: object
+      properties:
+        id: *id013
+        aggregateType:
+          type: string
+          enum:
+          - RIDE_REQUEST
+          - TRIP
+        aggregateId: *id013
+        fromStatus:
+          type: string
+          maxLength: 40
+          nullable: true
+        toStatus:
+          type: string
+          maxLength: 40
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+        at: *id016
+      required:
+      - id
+      - aggregateType
+      - aggregateId
+      - toStatus
+      - at
+    PriceVersion:
+      type: object
+      properties:
+        id: *id013
+        vehicleTypeId: *id013
+        baseFareVnd:
+          type: integer
+          minimum: 0
+        includedMeters:
+          type: integer
+          minimum: 0
+        perKmVnd:
+          type: integer
+          minimum: 0
+        effectiveAt: *id016
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+      required:
+      - id
+      - vehicleTypeId
+      - baseFareVnd
+      - includedMeters
+      - perKmVnd
+      - effectiveAt
+      - status
+    AuditLog:
+      type: object
+      properties:
+        id: *id013
+        auditRecordId: *id013
+        traceId:
+          type: string
+          maxLength: 64
+        occurredAt: *id016
+      required:
+      - id
+      - auditRecordId
+      - traceId
+      - occurredAt
+    Incident:
+      type: object
+      properties:
+        id: *id013
+        tripId: *id013
+        source:
+          type: string
+          enum:
+          - CUSTOMER
+          - DRIVER
+          - OPERATOR
+          - SYSTEM
+        reason:
+          type: string
+          maxLength: 500
+        status:
+          type: string
+          enum:
+          - OPEN
+          - IN_PROGRESS
+          - RESOLVED
+          - CLOSED
+        resolution:
+          type: string
+          enum:
+          - CONTINUE_TRIP
+          - CANCEL_TRIP
+          - TERMINATE_TRIP
+          - FARE_REVIEW
+          nullable: true
+        version: *id015
+      required:
+      - id
+      - tripId
+      - source
+      - reason
+      - status
+      - version
+    DriverApplication:
+      type: object
+      properties:
+        id: *id013
+        driverId: *id013
+        status:
+          type: string
+          enum:
+          - PENDING_REVIEW
+          - APPROVED
+          - REJECTED
+        reviewerId:
+          type: string
+          format: uuid
+          nullable: true
+        reason:
+          type: string
+          maxLength: 500
+          nullable: true
+      required:
+      - id
+      - driverId
+      - status
+    DriverDocument:
+      type: object
+      properties:
+        id: *id013
+        driverId: *id013
+        type:
+          type: string
+          enum:
+          - GPLX
+          - CCCD
+          - VEHICLE_REGISTRATION
+        fileKey:
+          type: string
+          maxLength: 255
+        maskedValue:
+          type: string
+          maxLength: 80
+        status:
+          type: string
+          enum:
+          - UPLOADED
+          - VERIFIED
+          - REJECTED
+          - REPLACED
+      required:
+      - id
+      - driverId
+      - type
+      - fileKey
+      - maskedValue
+      - status
+    Availability:
+      type: object
+      properties:
+        driverId: *id013
+        status:
+          type: string
+          enum:
+          - OFFLINE
+          - ONLINE
+          - ON_TRIP
+        lastLocationAt:
+          type: string
+          format: date-time
+          nullable: true
+        version: *id015
+      required:
+      - driverId
+      - status
+      - version
+    VehicleType:
+      type: object
+      properties:
+        id: *id013
+        code:
+          type: string
+          maxLength: 30
+          enum:
+          - MOTORBIKE
+          - CAR_4_SEAT
+        name:
+          type: string
+          maxLength: 80
+        active:
+          type: boolean
+      required:
+      - id
+      - code
+      - name
+      - active
+    IdempotencyRecord:
+      type: object
+      properties:
+        subjectId: *id013
+        key: *id013
+        payloadHash:
+          type: string
+          maxLength: 64
+        response:
+          type: object
+          additionalProperties: true
+        expiresAt: *id016
+      required:
+      - subjectId
+      - key
+      - payloadHash
+      - response
+      - expiresAt
+    OutboxEvent:
+      type: object
+      properties:
+        id: *id013
+        aggregateId: *id013
+        eventType:
+          type: string
+          maxLength: 100
+        payload:
+          type: object
+          additionalProperties: true
+        occurredAt: *id016
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - aggregateId
+      - eventType
+      - payload
+      - occurredAt
+    RefreshToken:
+      type: object
+      properties:
+        id: *id013
+        userId: *id013
+        tokenHash:
+          type: string
+          maxLength: 255
+        expiresAt: *id016
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - userId
+      - tokenHash
+      - expiresAt
+    LoginAttempt:
+      type: object
+      properties:
+        id: *id013
+        phoneHash:
+          type: string
+          maxLength: 64
+        ip:
+          type: string
+          maxLength: 45
+        success:
+          type: boolean
+        attemptedAt: *id016
+      required:
+      - id
+      - phoneHash
+      - ip
+      - success
+      - attemptedAt
+    RateLimitCounter:
+      type: object
+      properties:
+        scopeKey:
+          type: string
+          maxLength: 160
+        windowStart: *id016
+        count:
+          type: integer
+          minimum: 0
+        expiresAt: *id016
+      required:
+      - scopeKey
+      - windowStart
+      - count
+      - expiresAt
+    ReportProjection:
+      type: object
+      properties:
+        metricDate:
+          type: string
+          format: date
+        dimensions:
+          type: object
+          additionalProperties: true
+        metrics:
+          type: object
+          additionalProperties: true
+        sourceEventId: *id013
+      required:
+      - metricDate
+      - dimensions
+      - metrics
+      - sourceEventId
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VERSION_CONFLICT
+        message:
+          type: string
+          example: Phiên bản dữ liệu không còn mới nhất
+      required:
+      - code
+      - message
+    RegisterRequest:
+      type: object
+      properties:
+        phone: *id017
+        password: &id018
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$
+          writeOnly: true
+          example: CabPilot2026
+        fullName:
+          type: string
+          maxLength: 120
+          example: Nguyễn Minh An
+      required:
+      - phone
+      - password
+      - fullName
+    UserResponse:
+      type: object
+      properties:
+        id: *id013
+        phone: *id017
+        roles:
+          type: array
+          items:
+            type: string
+          example:
+          - CUSTOMER
+        status:
+          type: string
+          example: ACTIVE
+      required:
+      - id
+      - phone
+      - roles
+      - status
+    DriverRegistrationRequest:
+      type: object
+      properties:
+        phone: *id017
+        password: *id018
+        fullName:
+          type: string
+          maxLength: 120
+        vehicleTypeId: *id013
+        plate:
+          type: string
+          maxLength: 15
+        documents:
+          type: array
+          minItems: 3
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                - GPLX
+                - CCCD
+                - VEHICLE_REGISTRATION
+              fileKey:
+                type: string
+                maxLength: 255
+              maskedValue:
+                type: string
+                maxLength: 80
+            required:
+            - type
+            - fileKey
+            - maskedValue
+      required:
+      - phone
+      - password
+      - fullName
+      - vehicleTypeId
+      - plate
+      - documents
+    LoginRequest:
+      type: object
+      properties:
+        phone: *id017
+        password: *id018
+      required:
+      - phone
+      - password
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          minLength: 20
+        refreshToken:
+          type: string
+          minLength: 20
+        tokenType:
+          type: string
+          enum:
+          - Bearer
+        expiresIn:
+          type: integer
+          minimum: 1
+      required:
+      - accessToken
+      - refreshToken
+      - tokenType
+      - expiresIn
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          minLength: 20
+      required:
+      - refreshToken
+    ProfilePatch:
+      type: object
+      properties:
+        fullName:
+          type: string
+          maxLength: 120
+        version: *id015
+      required:
+      - version
+    Profile:
+      type: object
+      properties:
+        userId: *id013
+        fullName:
+          type: string
+          maxLength: 120
+        version: *id015
+      required:
+      - userId
+      - fullName
+      - version
+    AvailabilityRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ONLINE
+          - OFFLINE
+        version: *id015
+      required:
+      - status
+      - version
+    LocationRequest:
+      type: object
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+        receivedAt: *id016
+        tripId:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - lat
+      - lng
+      - receivedAt
+    Location:
+      type: object
+      properties:
+        driverId: *id013
+        lat:
+          type: number
+        lng:
+          type: number
+        receivedAt: *id016
+        accepted:
+          type: boolean
+      required:
+      - driverId
+      - lat
+      - lng
+      - receivedAt
+      - accepted
+    InternalUserCreate:
+      type: object
+      properties:
+        phone: *id017
+        fullName:
+          type: string
+          maxLength: 120
+        role:
+          type: string
+          enum:
+          - OPERATOR
+          - EXECUTIVE
+        temporaryPassword: *id018
+      required:
+      - phone
+      - fullName
+      - role
+      - temporaryPassword
+    AccountAction:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        version: *id015
+      required:
+      - reason
+      - version
+    RideRequestCreate:
+      type: object
+      properties:
+        pickup: *id014
+        destination: *id014
+        vehicleTypeId: *id013
+      required:
+      - pickup
+      - destination
+      - vehicleTypeId
+    Cancellation:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        version: *id015
+      required:
+      - reason
+      - version
+    OfferDecision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - ACCEPT
+          - DECLINE
+        version: *id015
+      required:
+      - decision
+      - version
+    TripStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ARRIVED_AT_PICKUP
+          - PICKED_UP
+          - IN_PROGRESS
+          - COMPLETED
+        version: *id015
+      required:
+      - status
+      - version
+    RatingCreate:
+      type: object
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 500
+      required:
+      - score
+    FareEstimateRequest:
+      type: object
+      properties:
+        pickup: *id014
+        destination: *id014
+        vehicleTypeId: *id013
+      required:
+      - pickup
+      - destination
+      - vehicleTypeId
+    FareEstimate:
+      type: object
+      properties:
+        estimated:
+          type: boolean
+          enum:
+          - true
+        distanceMeters:
+          type: integer
+          minimum: 0
+        quotedFareVnd:
+          type: integer
+          minimum: 0
+        priceVersionId: *id013
+      required:
+      - estimated
+      - distanceMeters
+      - quotedFareVnd
+      - priceVersionId
+    FareReviewRequest:
+      type: object
+      properties:
+        distanceMeters:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        version: *id015
+      required:
+      - distanceMeters
+      - reason
+      - version
+    PaymentCreate:
+      type: object
+      properties:
+        method:
+          type: string
+          enum:
+          - SANDBOX
+        sandboxScenario:
+          type: string
+          enum:
+          - SUCCESS
+          - FAIL
+          - TIMEOUT_THEN_SUCCESS
+          - TIMEOUT_THEN_FAIL
+          - DUPLICATE_CALLBACK
+      required:
+      - method
+      - sandboxScenario
+    CashConfirmation:
+      type: object
+      properties:
+        received:
+          type: boolean
+          enum:
+          - true
+        version: *id015
+      required:
+      - received
+      - version
+    ProviderCallback:
+      type: object
+      properties:
+        providerEventId:
+          type: string
+          maxLength: 100
+        attemptId: *id013
+        status:
+          type: string
+          enum:
+          - SUCCEEDED
+          - FAILED
+          - UNKNOWN
+        occurredAt: *id016
+      required:
+      - providerEventId
+      - attemptId
+      - status
+      - occurredAt
+    NotificationPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/Notification'
+        page:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+      required:
+      - items
+      - page
+      - size
+      - total
+    NotificationPatch:
+      type: object
+      properties:
+        read:
+          type: boolean
+          enum:
+          - true
+        version: *id015
+      required:
+      - read
+      - version
+    SSE:
+      type: string
+      example: 'id: 550e8400-e29b-41d4-a716-446655440000
+
+        event: TripStatusChanged
+
+        data: {"tripId":"550e8400-e29b-41d4-a716-446655440001","status":"IN_PROGRESS"}
+
+
+        '
+    ActiveTripPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/Trip'
+        asOf: *id016
+      required:
+      - items
+      - asOf
+    IncidentCreate:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - reason
+    IncidentUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - IN_PROGRESS
+          - RESOLVED
+          - CLOSED
+        resolution:
+          type: string
+          enum:
+          - CONTINUE_TRIP
+          - CANCEL_TRIP
+          - TERMINATE_TRIP
+          - FARE_REVIEW
+        note:
+          type: string
+          maxLength: 500
+        version: *id015
+      required:
+      - status
+      - version
+    Report:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          enum:
+          - Asia/Ho_Chi_Minh
+        tripCount:
+          type: integer
+          minimum: 0
+        revenueVnd:
+          type: integer
+          minimum: 0
+        completionRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        cancellationRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        findDriverRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        acceptanceRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        averageRating:
+          type: number
+          minimum: 1
+          maximum: 5
+          nullable: true
+        asOf: *id016
+      required:
+      - from
+      - to
+      - timezone
+      - tripCount
+      - revenueVnd
+      - asOf
+    Last-Event-ID:
+      type: string
+    filters:
+      type: object
+      properties:
+        status:
+          type: string
+    query:
+      type: object
+      properties:
+        from: *id016
+        to: *id016
+  responses:
+    BadRequest:
+      description: Yêu cầu không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: BADREQUEST
+            message: Yêu cầu không hợp lệ
+    Unauthorized:
+      description: Chưa xác thực hoặc chữ ký không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: UNAUTHORIZED
+            message: Chưa xác thực hoặc chữ ký không hợp lệ
+    Forbidden:
+      description: Không có quyền
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: FORBIDDEN
+            message: Không có quyền
+    NotFound:
+      description: Không tìm thấy tài nguyên
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: NOTFOUND
+            message: Không tìm thấy tài nguyên
+    Conflict:
+      description: Xung đột trạng thái hoặc phiên bản
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: CONFLICT
+            message: Xung đột trạng thái hoặc phiên bản
+    Gone:
+      description: Lời mời đã hết hiệu lực
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: GONE
+            message: Lời mời đã hết hiệu lực
+    UnprocessableEntity:
+      description: Dữ liệu không thỏa quy tắc nghiệp vụ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: UNPROCESSABLEENTITY
+            message: Dữ liệu không thỏa quy tắc nghiệp vụ
+    Locked:
+      description: Đăng nhập tạm khóa
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: LOCKED
+            message: Đăng nhập tạm khóa
+    TooManyRequests:
+      description: Vượt giới hạn yêu cầu
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: TOOMANYREQUESTS
+            message: Vượt giới hạn yêu cầu
+      headers:
+        Retry-After:
+          description: Số giây chờ trước khi thử lại.
+          schema:
+            type: integer
+            minimum: 1
+          example: 60
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID giữ trong 24 giờ theo DEC-34.
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440001
+    ProviderSignature:
+      name: X-Signature
+      in: header
+      required: true
+      description: Chữ ký HMAC callback theo DEC-27.
+      schema:
+        type: string
+        minLength: 32
+      example: sha256=7e9d8f6c5b4a3210dcbafedcba0123456789abcd
+    LastEventId:
+      name: Last-Event-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440002
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 1
+      example: 1
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 20
+    TripStatusFilter:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+        - ASSIGNED
+        - ARRIVED_AT_PICKUP
+        - IN_PROGRESS
+      example: IN_PROGRESS
+    From:
+      name: from
+      in: query
+      required: true
+      description: Đầu kỳ bao gồm, Asia/Ho_Chi_Minh.
+      schema: *id016
+      example: '2026-09-01T00:00:00+07:00'
+    To:
+      name: to
+      in: query
+      required: true
+      description: Cuối kỳ loại trừ, tối đa 366 ngày.
+      schema: *id016
+      example: '2026-10-01T00:00:00+07:00'

@@ -32,7 +32,7 @@ flowchart LR
   N[BC-04 Notification]
   O[BC-05 Operations & Reporting]
 
-  ID -->|Driver eligibility/location REST; DriverLocationUpdated| R
+  ID -->|candidate/snapshot REST; DriverLocationUpdated| R
   R -->|TripCompleted; Fare query ACL| B
   R -->|Ride/Offer/Trip events| N
   B -->|FareFinalized; PaymentStatusChanged| N
@@ -40,8 +40,9 @@ flowchart LR
   R -->|AuditRecorded; TripStatusChanged| O
   B -->|AuditRecorded; payment projection| O
   N -->|delivery metrics| O
-  O -->|IncidentResolved command/event| R
-  O -->|Fare review command| B
+  O -->|idempotent incident command REST| R
+  O -->|idempotent fare review REST| B
+  O -->|IncidentResolved| N
 ```
 
 Identity & Driver cung cấp Open Host Service cho xác thực và điều kiện tài xế. Ride là customer của dữ liệu vị trí nhưng không đọc database Identity. Billing là downstream conformist với `TripCompleted`. Notification và Operations dùng Published Language qua RabbitMQ; Operations dùng Anti-Corruption Layer khi phát lệnh kết thúc Trip hoặc review Fare.
@@ -146,13 +147,50 @@ CI phải kiểm tra `.env` không được Git track, `.env.example` có mặt,
 | Biên HTTP | Body tối đa 1 MiB, JSON UTF-8, CORS allow-list ba web app, TLS ≥1.2. |
 | Health facade | Thực thi `/health`, `/ready`, gom `/health/services` song song. |
 
-| Prefix | Đích | Auth/role |
-| --- | --- | --- |
-| `/api/v1/auth`, `/api/v1/me/profile`, `/api/v1/drivers`, `/api/v1/operations/accounts`, `/api/v1/operations/internal-users` | `identity-driver-service:8081` | Register/login public; callback OTP public có challenge; còn lại JWT theo manifest. |
-| `/api/v1/ride-requests`, `/api/v1/ride-offers`, `/api/v1/trips/*/status`, `/api/v1/trips/*/cancellation`, `/api/v1/trips/*/ratings` | `ride-service:8082` | CUSTOMER/DRIVER theo API. |
-| `/api/v1/fare-estimates`, `/api/v1/fares`, `/api/v1/trips/*/fare`, `/api/v1/trips/*/payments`, `/api/v1/payments` | `billing-service:8083` | JWT; riêng provider callback dùng HMAC. |
-| `/api/v1/notifications`, `/api/v1/me/events` | `notification-service:8084` | CUSTOMER/DRIVER. |
-| `/api/v1/operations/trips`, `/api/v1/operations/incidents`, `/api/v1/reports`, `/api/v1/trips/*/incidents` | `operations-reporting-service:8085` | OPERATOR/ADMIN/EXECUTIVE hoặc actor Trip theo manifest. |
+| Method | Path pattern | Service | Auth/role |
+| --- | --- | --- | --- |
+| GET | `/health` (API-X01) | Gateway | Public |
+| GET | `/ready` (API-X02) | Gateway | Public |
+| GET | `/health/services` (API-X03) | Gateway | Public |
+| POST | `/api/v1/auth/register` (API-01) | Identity & Driver | Public |
+| POST | `/api/v1/auth/driver-registrations` (API-02) | Identity & Driver | Public + OTP verification |
+| POST | `/api/v1/auth/login` (API-03) | Identity & Driver | Public |
+| POST | `/api/v1/auth/refresh` (API-04) | Identity & Driver | Authenticated |
+| PATCH | `/api/v1/me/profile` (API-05) | Identity & Driver | CUSTOMER/DRIVER |
+| PUT | `/api/v1/drivers/me/availability` (API-06) | Identity & Driver | DRIVER |
+| PUT | `/api/v1/drivers/me/location` (API-07) | Identity & Driver | DRIVER |
+| POST | `/api/v1/operations/internal-users` (API-08) | Identity & Driver | ADMIN |
+| POST | `/api/v1/operations/accounts/{id}/lock` (API-09) | Identity & Driver | OPERATOR |
+| POST | `/api/v1/operations/accounts/{id}/unlock` (API-10) | Identity & Driver | OPERATOR |
+| GET | `/api/v1/operations/customers/{id}` (API-X04) | Identity & Driver | OPERATOR |
+| GET | `/api/v1/operations/drivers/{id}` (API-X05) | Identity & Driver | OPERATOR |
+| GET | `/api/v1/operations/drivers/nearby` (API-X06) | Identity & Driver | OPERATOR |
+| POST | `/api/v1/auth/driver-registrations/otp-requests` (API-X08) | Identity & Driver | Public |
+| POST | `/api/v1/auth/driver-registrations/otp-verifications` (API-X09) | Identity & Driver | Public |
+| GET | `/api/v1/operations/driver-applications` (API-X10) | Identity & Driver | OPERATOR |
+| GET | `/api/v1/operations/driver-applications/{id}` (API-X11) | Identity & Driver | OPERATOR |
+| PATCH | `/api/v1/operations/driver-applications/{id}` (API-X12) | Identity & Driver | OPERATOR |
+| POST | `/api/v1/ride-requests` (API-11) | Ride | CUSTOMER |
+| POST | `/api/v1/ride-requests/{id}/cancellation` (API-12) | Ride | CUSTOMER |
+| POST | `/api/v1/ride-offers/{id}/responses` (API-13) | Ride | DRIVER |
+| PUT | `/api/v1/trips/{id}/status` (API-14) | Ride | DRIVER |
+| POST | `/api/v1/trips/{id}/cancellation` (API-15) | Ride | CUSTOMER/DRIVER |
+| GET | `/api/v1/trips/{id}` (API-16) | Ride | CUSTOMER/DRIVER |
+| POST | `/api/v1/trips/{id}/ratings` (API-17) | Ride | CUSTOMER |
+| GET | `/api/v1/ride-requests` (API-X07) | Ride | CUSTOMER |
+| POST | `/api/v1/fare-estimates` (API-18) | Billing | CUSTOMER |
+| GET | `/api/v1/trips/{id}/fare` (API-19) | Billing | CUSTOMER/DRIVER |
+| POST | `/api/v1/fares/{id}/reviews` (API-20) | Billing | OPERATOR |
+| POST | `/api/v1/trips/{id}/payments` (API-21) | Billing | CUSTOMER |
+| POST | `/api/v1/payments/{id}/cash-confirmation` (API-22) | Billing | DRIVER |
+| POST | `/api/v1/payments/provider-callbacks` (API-23) | Billing | Mock Provider, HMAC |
+| GET | `/api/v1/notifications` (API-24) | Notification | CUSTOMER/DRIVER |
+| PATCH | `/api/v1/notifications/{id}` (API-25) | Notification | CUSTOMER/DRIVER |
+| GET | `/api/v1/me/events` (API-26) | Notification | CUSTOMER/DRIVER |
+| GET | `/api/v1/operations/trips/active` (API-27) | Operations & Reporting | OPERATOR |
+| POST | `/api/v1/trips/{id}/incidents` (API-28) | Operations & Reporting | CUSTOMER/DRIVER/OPERATOR |
+| PATCH | `/api/v1/operations/incidents/{id}` (API-29) | Operations & Reporting | OPERATOR |
+| GET | `/api/v1/reports/operations` (API-30) | Operations & Reporting | OPERATOR/ADMIN/EXECUTIVE |
 
 Chỉ `api-gateway` publish `8080:8080`; service và database chỉ tham gia mạng `cab-internal` với `expose`, không có `ports`. Kiểm chứng: `curl localhost:8081/health` phải không kết nối; `curl localhost:8080/health` trả 200; log Gateway và service có cùng correlation ID.
 
@@ -168,10 +206,14 @@ flowchart LR
 
 | Cặp service | Kiểu | Contract/lý do | Resilience |
 | --- | --- | --- | --- |
-| Ride → Identity & Driver | REST GET nội bộ | Lấy tối đa 3 ứng viên mỗi vòng theo vị trí/vehicle; cần ngay để mở offer. | 800 ms; 1 retry GET; circuit breaker; lỗi coi vòng hiện tại chưa có ứng viên. |
-| Ride → Billing | REST POST nội bộ fare estimate hoặc event | Estimate cần ngay; Fare cuối dùng `TripCompleted`. | 800 ms cho estimate; event retry/DLQ cho Fare. |
-| Operations → Ride/Billing | REST command có idempotency | Kết thúc Trip do incident hoặc xác minh Fare cần phản hồi ngay cho OPERATOR. | 1.5 s; không tự retry POST nếu thiếu cùng Idempotency-Key. |
-| Identity/Ride/Billing → Notification | RabbitMQ | Thông báo không được rollback giao dịch nguồn. | Retry 1/5/25 giây, rồi DLQ theo DEC-37. |
+| Ride → Identity & Driver | REST GET nội bộ | Candidate trả `driverId` và snapshot `fullName`, `plate`, `vehicleTypeCode`, `ratingAverage`; nếu ACCEPT thiếu snapshot thì gọi lại theo driverId. | 800 ms; 1 retry GET; circuit breaker. Candidate query lỗi thì hoãn vòng; snapshot lỗi lúc ACCEPT trả 503 và chưa commit assignment. |
+| Ride → Billing | REST POST nội bộ | Fare estimate cần ngay trước khi tạo RideRequest. | 800 ms; không tạo request nếu không có quote; dùng cùng Idempotency-Key khi retry. |
+| Operations → Ride | REST command có idempotency | Kết thúc Trip theo Incident resolution. | 1,5 giây; chỉ retry với cùng Idempotency-Key. |
+| Operations → Billing | REST command có idempotency | Fare review cần phản hồi ngay cho OPERATOR. | 1,5 giây; chỉ retry với cùng Idempotency-Key. |
+| Identity & Driver → Ride | RabbitMQ | `DriverLocationUpdated` để cộng distance khi Trip IN_PROGRESS. | Outbox, queue riêng, dedupe eventId, DLQ. |
+| Ride → Identity & Driver | RabbitMQ | `RideAssigned`/`TripStatusChanged` cập nhật projection Availability.ON_TRIP. | Eventual consistency; không dùng để bảo vệ invariant Trip. |
+| Ride → Billing | RabbitMQ | `TripCompleted` kích hoạt Fare cuối. | Durable, idempotent theo tripId+version, DLQ. |
+| Identity/Ride/Billing/Operations → Notification | RabbitMQ | Thông báo không rollback giao dịch nguồn. | Retry 1/5/25 giây rồi DLQ theo DEC-37. |
 | Tất cả → Operations | RabbitMQ | Audit/projection không chặn request nguồn. | Outbox, consumer idempotent, DLQ. |
 
 REST nội bộ dùng service token ngắn hạn trong mạng riêng; production thay bằng mTLS. Không tin role do client gửi. `X-Correlation-Id` được truyền nguyên vẹn vào message.
@@ -435,13 +477,19 @@ Khi Billing down, endpoint trả HTTP 503: `{"status":"degraded","services":{"bi
 
 Chọn **RabbitMQ**: luồng pilot cần routing theo loại event, acknowledgement, retry theo khoảng 1/5/25 giây và DLQ; quy mô nhỏ, không yêu cầu replay lịch sử dài. Không chọn Kafka vì vận hành partition/KRaft và retention log nặng hơn nhu cầu 7 tuần; thứ tự cần thiết đã được bảo vệ bằng aggregate version và một queue theo consumer.
 
-| Exchange/queue | Producer | Consumer | Routing key | TTL/retention | DLQ |
+| Exchange/queue | Producer | Consumer | Event/routing key | TTL/retention | DLQ |
 | --- | --- | --- | --- | --- | --- |
-| `cab.domain` / `ride.notification` | Ride | Notification | `ride.*`, `offer.*`, `trip.*` | durable đến ack | `ride.notification.dlq` |
-| `cab.domain` / `billing.notification` | Billing | Notification | `fare.*`, `payment.*` | durable đến ack | `billing.notification.dlq` |
-| `cab.audit` / `operations.audit` | Mọi service | Operations | `audit.recorded` | 7 ngày pilot | `operations.audit.dlq` |
-| `cab.domain` / `operations.projection` | Ride/Billing | Operations | `trip.*`, `payment.*` | 7 ngày pilot | `operations.projection.dlq` |
-| `cab.command` / `ride.incident` | Operations | Ride | `trip.terminate` | 24 giờ | `ride.command.dlq` |
+| `cab.domain` / `identity.ride-location` | Identity & Driver | Ride | `DriverLocationUpdated.v1` | durable đến ack | `identity.ride-location.dlq` |
+| `cab.domain` / `ride.identity-state` | Ride | Identity & Driver | `RideAssigned.v1`, `TripStatusChanged.v1` | durable đến ack | `ride.identity-state.dlq` |
+| `cab.domain` / `ride.billing` | Ride | Billing | `TripCompleted.v1` | durable đến ack | `ride.billing.dlq` |
+| `cab.domain` / `identity.notification` | Identity & Driver | Notification | `DriverApplicationDecided.v1` | durable đến ack | `identity.notification.dlq` |
+| `cab.domain` / `ride.notification` | Ride | Notification | `RideRequested.v1`, `RideOfferCreated.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1` | durable đến ack | `ride.notification.dlq` |
+| `cab.domain` / `billing.notification` | Billing | Notification | `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1` | durable đến ack | `billing.notification.dlq` |
+| `cab.domain` / `operations.notification` | Operations | Notification | `IncidentResolved.v1` | durable đến ack | `operations.notification.dlq` |
+| `cab.domain` / `identity.operations` | Identity & Driver | Operations | `DriverLocationUpdated.v1`, `DriverApplicationDecided.v1` | 7 ngày pilot | `identity.operations.dlq` |
+| `cab.domain` / `ride.operations` | Ride | Operations | `RideRequested.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `TripCompleted.v1`, `RatingCreated.v1` | 7 ngày pilot | `ride.operations.dlq` |
+| `cab.domain` / `billing.operations` | Billing | Operations | `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1` | 7 ngày pilot | `billing.operations.dlq` |
+| `cab.audit` / `operations.audit` | Mọi service | Operations | `AuditRecorded.v1` | 7 ngày pilot | `operations.audit.dlq` |
 
 Kiểm tra broker: `docker compose exec rabbitmq rabbitmq-diagnostics ping` và `rabbitmqctl list_queues name messages_ready messages_unacknowledged`. Management UI chỉ mở qua `docker compose exec`/SSH tunnel, không publish host. Khi tạo RideRequest, outbox publisher phải làm tăng message/consumer log của `RideRequested`; consumer lưu `eventId` trước side effect. Notification retry bằng delay queue 1/5/25 giây rồi DLQ theo DEC-37.
 
@@ -451,7 +499,7 @@ Kiểm tra broker: `docker compose exec rabbitmq rabbitmq-diagnostics ping` và 
 
 #### Bước 1. Tóm tắt xác định và phân rã
 
-BC-01 sở hữu danh tính, hồ sơ và điều kiện hoạt động của tài xế. Có thể tách Identity khỏi Driver Location khi quy mô tăng, nhưng pilot giữ chung vì invariant ONLINE cần đồng thời User ACTIVE, DriverApplication APPROVED, Vehicle ACTIVE, không Trip/offer mở và vị trí mới. Kết luận chi tiết ở Phần I.
+BC-01 sở hữu danh tính, hồ sơ và điều kiện hoạt động của tài xế. Có thể tách Identity khỏi Driver Location khi quy mô tăng, nhưng pilot giữ chung vì điều kiện ONLINE cần đồng thời User ACTIVE, DriverApplication APPROVED, Vehicle ACTIVE và vị trí mới. Ride tự bảo vệ invariant tài xế không có Trip/offer mở; Availability.ON_TRIP chỉ là projection đồng bộ trễ. Kết luận chi tiết ở Phần I.
 
 #### Bước 2. Business Design
 
@@ -471,8 +519,8 @@ stateDiagram-v2
   PENDING_REVIEW --> REJECTED: OPERATOR reject
   APPROVED --> OFFLINE: activate profile and vehicle
   OFFLINE --> ONLINE: eligibility valid
-  ONLINE --> ON_TRIP: Ride assigned
-  ON_TRIP --> ONLINE: Trip ended and driver opts online
+  ONLINE --> ON_TRIP: RideAssigned event, projection
+  ON_TRIP --> ONLINE: Trip ended event, projection
   ONLINE --> OFFLINE: driver toggles or location age >300s
 ```
 
@@ -482,8 +530,8 @@ stateDiagram-v2
 - Health nội bộ: `GET /health`, `GET /ready`.
 - API sở hữu: API-01–API-10.
 - Aggregate root: `User`, `DriverApplication`, `Vehicle`, `Availability`, `DriverLocation`.
-- Phát: `UserRegistered`, `AccountLocked`, `DriverApplicationDecided`, `AvailabilityChanged`, `DriverLocationUpdated`, `AuditRecorded` (mọi event có version).
-- Tiêu thụ: `RideAssigned`, `TripStatusChanged` để đổi Availability; không sửa Trip.
+- Phát: `DriverApplicationDecided.v1`, `DriverLocationUpdated.v1`, `AuditRecorded.v1`.
+- Tiêu thụ: `RideAssigned.v1`, `TripStatusChanged.v1` để cập nhật projection Availability.ON_TRIP; không bảo vệ invariant Trip và không sửa Trip.
 - REST ra ngoài: Ride internal query candidate/driver snapshot gọi vào BC này; BC này không gọi database khác.
 - Quyền: Public cho API-01/02/03; Authenticated cho API-04; CUSTOMER/DRIVER cho API-05; DRIVER cho API-06/07; ADMIN API-08; OPERATOR API-09/10.
 
@@ -521,26 +569,75 @@ API bổ sung theo phiếu chấm:
 | RateLimitCounter | ENT-27 | value record hạ tầng | Contract đếm rate tại Gateway. |
 | OtpChallenge | `⚠ Giả định`, ngoài danh mục entity chuẩn | entity | Challenge OTP đăng ký tài xế, chỉ lưu hash và hạn dùng. |
 
-| Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/độ nhạy cảm |
+| Field | Kiểu logic | Bắt buộc (Y/N) | Duy nhất (Y/N) | Ràng buộc/Nguồn SRS |
 | --- | --- | --- | --- | --- |
-| User.id / phone | id / E.164(15) | Y/Y | Y/Y | phone `SENSITIVE-ENCRYPT`, dấu vân tay HMAC để kiểm tra duy nhất. |
-| User.passwordHash | text(255) | Y | N | `SENSITIVE-HASH`; không bao giờ trả API. |
-| User.roles / status / mustChangePassword | set<Role> / enum / boolean | Y/Y/Y | N | Một role pilot; PENDING→ACTIVE↔LOCKED→DISABLED. |
-| CustomerProfile.userId / fullName / createdAt | id / text(120) / thời điểm | Y/Y/Y | Y/N/N | userId logical 1–1; fullName `SENSITIVE-ENCRYPT`. |
-| DriverProfile.userId / fullName / ratingAverage / version | id / text(120) / số thực / số nguyên | Y/Y/N/Y | Y/N/N/N | fullName `SENSITIVE-ENCRYPT`; rating 1..5. |
-| Vehicle.id / driverId / vehicleTypeId | id / id / id | Y/Y/Y | Y/Y/N | vehicleTypeId là ref nội bộ danh mục. |
-| Vehicle.plate / status | text(15) / enum | Y/Y | Y/N | plate `SENSITIVE-ENCRYPT` + dấu vân tay HMAC để so khớp. |
-| DriverLocation.driverId / lat / lng / receivedAt / tripId | id / số thực / số thực / thời điểm / id | Y/Y/Y/Y/N | N | tripId `ref → BC-02`; WGS84, bản mới hơn thắng. |
-| DriverApplication.id / driverId / status | id / id / enum | Y/Y/Y | Y/Y/N | PENDING_REVIEW→APPROVED/REJECTED. |
-| DriverApplication.reviewerId / reason | id / text(500) | N/N | N | reviewerId ref User. |
-| DriverDocument.id / driverId / type / fileKey / maskedValue / status | id / id / enum / text(255) / text(80) / enum | Y/Y/Y/Y/Y/Y | id,fileKey | fileKey và maskedValue `SENSITIVE-ENCRYPT`. |
-| Availability.driverId / status / lastLocationAt / version | id / enum / thời điểm / số nguyên | Y/Y/N/Y | driverId | >300 giây tự OFFLINE. |
-| VehicleType.id / code / name / active | id / text(30) / text(80) / boolean | Y/Y/Y/Y | id,code | code MOTORBIKE/CAR_4_SEAT. |
-| IdempotencyRecord.subjectId / key / payloadHash / response / expiresAt | id / id / text(64) / JSON / thời điểm | Y | cặp subjectId+key | TTL 24 giờ; payloadHash không chứa plaintext nhạy cảm. |
-| RefreshToken.id / userId / tokenHash / expiresAt / revokedAt | id / id / text(255) / thời điểm / thời điểm | Y/Y/Y/Y/N | id,tokenHash | tokenHash `SENSITIVE-HASH`. |
-| LoginAttempt.id / phoneHash / ip / success / attemptedAt | id / text(64) / text(45) / boolean / thời điểm | Y | id | phoneHash `SENSITIVE-HASH`; IP `SENSITIVE-ENCRYPT`. |
-| RateLimitCounter.scopeKey / windowStart / count / expiresAt | text(160) / thời điểm / số nguyên / thời điểm | Y | scopeKey | dữ liệu tạm theo DEC-30. |
-| OtpChallenge.id / phoneHash / otpHash / attempts / expiresAt / verifiedAt | id / text(64) / text(255) / số nguyên / thời điểm / thời điểm | Y/Y/Y/Y/Y/N | id | OTP sống 5 phút, tối đa 5 lần thử; giả định phiếu #21. |
+| User.id | id | Y | Y | ENT-01. |
+| User.phone | E.164(15) | Y | Y | FR-01; số điện thoại đăng nhập. |
+| User.passwordHash | text(255) | Y | N | FR-01; không trả qua API. |
+| User.roles | set\<Role\> | Y | N | DEC-33; chứa đúng một role. |
+| User.status | enum | Y | N | PENDING→ACTIVE↔LOCKED→DISABLED. |
+| User.mustChangePassword | boolean | Y | N | FR-04; bắt buộc đổi mật khẩu tài khoản seed. |
+| CustomerProfile.userId | id | Y | Y | Quan hệ logic 1–1 User. |
+| CustomerProfile.fullName | text(120) | Y | N | FR-01. |
+| CustomerProfile.createdAt | thời điểm | Y | N | Do server tạo. |
+| DriverProfile.userId | id | Y | Y | Quan hệ logic 1–1 User. |
+| DriverProfile.fullName | text(120) | Y | N | FR-03. |
+| DriverProfile.ratingAverage | số thực | N | N | Giá trị 1..5 khi đã có đánh giá. |
+| DriverProfile.version | số nguyên | Y | N | Optimistic concurrency. |
+| Vehicle.id | id | Y | Y | ENT-04. |
+| Vehicle.driverId | id | Y | Y | Pilot: một Vehicle ACTIVE/tài xế. |
+| Vehicle.vehicleTypeId | id | Y | N | Tham chiếu VehicleType nội bộ. |
+| Vehicle.plate | text(15) | Y | Y | FR-03; biển số duy nhất. |
+| Vehicle.status | enum | Y | N | ACTIVE/INACTIVE. |
+| DriverLocation.driverId | id | Y | N | Tham chiếu DriverProfile. |
+| DriverLocation.lat | số thực | Y | N | WGS84, -90..90. |
+| DriverLocation.lng | số thực | Y | N | WGS84, -180..180. |
+| DriverLocation.receivedAt | thời điểm | Y | N | Bản mới hơn thắng. |
+| DriverLocation.tripId | id | N | N | `ref → BC-02`. |
+| DriverApplication.id | id | Y | Y | ENT-19. |
+| DriverApplication.driverId | id | Y | Y | Một hồ sơ pilot/tài xế. |
+| DriverApplication.status | enum | Y | N | PENDING_REVIEW→APPROVED/REJECTED. |
+| DriverApplication.reviewerId | id | N | N | Tham chiếu User có role OPERATOR. |
+| DriverApplication.reason | text(500) | N | N | Lý do từ chối/ghi chú duyệt. |
+| DriverDocument.id | id | Y | Y | ENT-20. |
+| DriverDocument.driverId | id | Y | N | Tham chiếu DriverProfile. |
+| DriverDocument.type | enum | Y | N | Loại giấy tờ theo FR-03. |
+| DriverDocument.fileKey | text(255) | Y | Y | Khóa đối tượng tài liệu. |
+| DriverDocument.maskedValue | text(80) | Y | N | Giá trị đã che để hiển thị. |
+| DriverDocument.status | enum | Y | N | Trạng thái kiểm duyệt. |
+| Availability.driverId | id | Y | Y | Quan hệ logic 1–1 DriverProfile. |
+| Availability.status | enum | Y | N | OFFLINE/ONLINE/ON_TRIP. |
+| Availability.lastLocationAt | thời điểm | N | N | Quá 300 giây tự OFFLINE. |
+| Availability.version | số nguyên | Y | N | Optimistic concurrency. |
+| VehicleType.id | id | Y | Y | ENT-22. |
+| VehicleType.code | text(30) | Y | Y | MOTORBIKE/CAR_4_SEAT. |
+| VehicleType.name | text(80) | Y | N | Tên hiển thị. |
+| VehicleType.active | boolean | Y | N | Chỉ loại active được chọn. |
+| IdempotencyRecord.subjectId | id | Y | N | Thành phần khóa logic cùng key. |
+| IdempotencyRecord.key | id | Y | N | Thành phần khóa logic cùng subjectId. |
+| IdempotencyRecord.payloadHash | text(64) | Y | N | Phát hiện dùng lại key khác payload. |
+| IdempotencyRecord.response | JSON | N | N | Có khi xử lý hoàn tất. |
+| IdempotencyRecord.expiresAt | thời điểm | Y | N | TTL 24 giờ. |
+| RefreshToken.id | id | Y | Y | ENT-25. |
+| RefreshToken.userId | id | Y | N | Tham chiếu User. |
+| RefreshToken.tokenHash | text(255) | Y | Y | Không lưu token gốc. |
+| RefreshToken.expiresAt | thời điểm | Y | N | Hạn refresh token. |
+| RefreshToken.revokedAt | thời điểm | N | N | Có giá trị sau logout/thu hồi. |
+| LoginAttempt.id | id | Y | Y | ENT-26. |
+| LoginAttempt.phoneHash | text(64) | Y | N | Nhận diện cửa sổ đăng nhập. |
+| LoginAttempt.ip | text(45) | Y | N | IPv4/IPv6. |
+| LoginAttempt.success | boolean | Y | N | Kết quả lần thử. |
+| LoginAttempt.attemptedAt | thời điểm | Y | N | Tính cửa sổ 15 phút. |
+| RateLimitCounter.scopeKey | text(160) | Y | Y | ENT-27; khóa scope/cửa sổ. |
+| RateLimitCounter.windowStart | thời điểm | Y | N | DEC-30. |
+| RateLimitCounter.count | số nguyên | Y | N | Không âm. |
+| RateLimitCounter.expiresAt | thời điểm | Y | N | Hết cửa sổ thì loại bỏ. |
+| OtpChallenge.id | id | Y | Y | `⚠ Giả định` phiếu #21. |
+| OtpChallenge.phoneHash | text(64) | Y | N | Nhận diện phone không dùng plaintext. |
+| OtpChallenge.otpHash | text(255) | Y | N | Không lưu OTP gốc. |
+| OtpChallenge.attempts | số nguyên | Y | N | Tối đa 5. |
+| OtpChallenge.expiresAt | thời điểm | Y | N | Sống 5 phút. |
+| OtpChallenge.verifiedAt | thời điểm | N | N | Có khi xác minh thành công. |
 
 Quan hệ: User 1–1 CustomerProfile hoặc 1–1 DriverProfile; DriverProfile 1–1 DriverApplication, 1–N DriverDocument, 1–N Vehicle nhưng đúng một Vehicle ACTIVE, 1–1 Availability và 1–N DriverLocation. Tham chiếu `tripId` chỉ là ID BC-02, không có ràng buộc liên context.
 
@@ -570,6 +667,8 @@ Database `cab_identity_db`, user `cab_identity`. Quan hệ User–Profile–Vehi
 
 Các bảng chính: `users`, `customer_profiles`, `driver_profiles`, `vehicles`, `driver_locations`, `driver_applications`, `driver_documents`, `availabilities`, `vehicle_types`, `refresh_tokens`, `login_attempts`, `idempotency_records`, `outbox_events`. PK UUID; index unique trên blind index phone/plate; `(driver_id, received_at DESC)` cho location; `(status, received_at)` cho application.
 
+Mọi field logic ở Bước 4 ánh xạ sang cột `snake_case` cùng tên trong bảng của entity. Ngoại lệ vật lý: `User.phone`, `CustomerProfile.fullName`, `DriverProfile.fullName`, `Vehicle.plate`, `DriverDocument.fileKey/maskedValue` được tách thành `*_ciphertext`; các cột `*_nonce`, `*_key_version`, `*_blind_index` là cột kỹ thuật chỉ phục vụ mã hóa/tìm duy nhất. `DriverLocation` có thêm read model `driver_current_locations`; `IdempotencyRecord` có thêm `state`; `OutboxEvent` dùng các cột kỹ thuật retry/publish. Không field logic nào bị loại bỏ bởi các biểu diễn vật lý này.
+
 ```sql
 CREATE TABLE users (
   id uuid PRIMARY KEY,
@@ -578,7 +677,9 @@ CREATE TABLE users (
   phone_key_version text NOT NULL,
   phone_blind_index char(64) NOT NULL UNIQUE,
   password_hash varchar(255) NOT NULL,
-  role varchar(20) NOT NULL CHECK (role IN ('CUSTOMER','DRIVER','OPERATOR','ADMIN','EXECUTIVE')),
+  roles varchar(20)[] NOT NULL CHECK (
+    cardinality(roles)=1 AND roles[1] IN ('CUSTOMER','DRIVER','OPERATOR','ADMIN','EXECUTIVE')
+  ),
   status varchar(16) NOT NULL CHECK (status IN ('PENDING','ACTIVE','LOCKED','DISABLED')),
   must_change_password boolean NOT NULL
 );
@@ -690,8 +791,8 @@ stateDiagram-v2
 - Service/database/container/port: `ride-service` / `cab_ride_db` / `ride-service` / 8082; health `/health`, readiness `/ready`.
 - API sở hữu: API-11–API-17; API-X07 bổ sung `GET /api/v1/ride-requests?customerId=me&page=1&size=20` cho phiếu #14.
 - Aggregate root: RideRequest, RideOffer, Trip, Rating.
-- Phát: `RideRequested`, `RideOfferCreated`, `RideAssigned`, `RideRequestCancelled`, `TripStatusChanged`, `TripCompleted`, `RatingCreated`, `AuditRecorded`.
-- Tiêu thụ: `DriverLocationUpdated`, `AvailabilityChanged`, `IncidentResolved`.
+- Phát: `RideRequested.v1`, `RideOfferCreated.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `TripCompleted.v1`, `RatingCreated.v1`, `AuditRecorded.v1`.
+- Tiêu thụ: `DriverLocationUpdated.v1` để cộng distance khi Trip IN_PROGRESS. Candidate/availability lấy đồng bộ, còn lệnh Incident dùng REST.
 - REST đồng bộ: query candidate/snapshot ở BC-01, fare estimate ở BC-03. Role/ownership theo manifest.
 
 `⚠ Giả định (bổ sung theo phiếu chấm)`: API-X07 dùng page 1..1000, size 1..100 như BC-12 và chỉ trả RideRequest của `sub`; SRS UC-14 có lịch sử nhưng §12.1 chưa có endpoint.
@@ -706,19 +807,48 @@ stateDiagram-v2
 | RideOffer | ENT-13 | aggregate root | Lời mời tài xế có hạn. |
 | StatusHistory | ENT-15 | entity bất biến | Lịch sử chuyển trạng thái RideRequest/Trip. |
 
-| Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| Field | Kiểu logic | Bắt buộc (Y/N) | Duy nhất (Y/N) | Ràng buộc/Nguồn SRS |
 | --- | --- | --- | --- | --- |
-| RideRequest.id / customerId | id / id | Y/Y | id | customerId `ref → BC-01`. |
-| RideRequest.pickup / destination / vehicleTypeId | GeoPoint / GeoPoint / id | Y/Y/Y | N | vùng lat 10.35..11.20, lng 106.35..107.05; vehicleTypeId ref BC-01. |
-| RideRequest.quotedFareVnd / priceVersionId | tiền / id | N/N | N | ref snapshot BC-03. |
-| RideRequest.status / version | enum / số nguyên | Y/Y | N | SEARCHING→ASSIGNED/NO_DRIVER_FOUND/CANCELLED. |
-| Trip.id / rideRequestId / driverId | id / id / id | Y/Y/Y | id,rideRequestId | driverId `ref → BC-01`. |
-| Trip.status / distanceMeters / distanceSource / version | enum / số nguyên / enum / số nguyên | Y/N/N/Y | N | Không lùi trạng thái. |
-| Rating.id / tripId / customerId / score / comment | id / id / id / số nguyên / text(500) | Y/Y/Y/Y/N | id,tripId | score nguyên 1..5, trong 7 ngày. |
-| RideOffer.id / rideRequestId / driverId / expiresAt / status / version | id / id / id / thời điểm / enum / số nguyên | Y | id | Một driver tối đa một PENDING toàn hệ thống. |
-| StatusHistory.id / aggregateType / aggregateId / fromStatus / toStatus / actorId / at | id / enum / id / text(40) / text(40) / id / thời điểm | Y/Y/Y/N/Y/N/Y | id | Append-only; actorId ref BC-01. |
+| RideRequest.id | id | Y | Y | ENT-05. |
+| RideRequest.customerId | id | Y | N | `ref → BC-01`. |
+| RideRequest.pickup | GeoPoint | Y | N | Vùng lat 10.35..11.20, lng 106.35..107.05. |
+| RideRequest.destination | GeoPoint | Y | N | Cùng vùng phục vụ pickup. |
+| RideRequest.vehicleTypeId | id | Y | N | `ref → BC-01`. |
+| RideRequest.quotedFareVnd | tiền | N | N | Snapshot estimate từ BC-03. |
+| RideRequest.priceVersionId | id | N | N | `ref → BC-03`. |
+| RideRequest.status | enum | Y | N | SEARCHING→ASSIGNED/NO_DRIVER_FOUND/CANCELLED. |
+| RideRequest.version | số nguyên | Y | N | Optimistic concurrency. |
+| Trip.id | id | Y | Y | ENT-06. |
+| Trip.rideRequestId | id | Y | Y | Một Trip tối đa cho RideRequest. |
+| Trip.driverId | id | Y | N | `ref → BC-01`. |
+| Trip.driverFullNameSnapshot | text(120) | Y | N | Snapshot BC-01 lúc ACCEPT. |
+| Trip.driverPlateSnapshot | text(15) | Y | N | Snapshot BC-01 lúc ACCEPT. |
+| Trip.driverVehicleTypeSnapshot | text(30) | Y | N | Snapshot BC-01 lúc ACCEPT. |
+| Trip.driverRatingAverageSnapshot | số thực | N | N | Snapshot BC-01 lúc ACCEPT. |
+| Trip.status | enum | Y | N | Không lùi trạng thái. |
+| Trip.distanceMeters | số nguyên | N | N | Không âm. |
+| Trip.distanceSource | enum | N | N | GPS/OPERATOR_ESTIMATE. |
+| Trip.version | số nguyên | Y | N | Optimistic concurrency. |
+| Rating.id | id | Y | Y | ENT-11. |
+| Rating.tripId | id | Y | Y | Một Rating/Trip. |
+| Rating.customerId | id | Y | N | `ref → BC-01`; phải sở hữu Trip. |
+| Rating.score | số nguyên | Y | N | 1..5, trong 7 ngày. |
+| Rating.comment | text(500) | N | N | Nội dung người dùng. |
+| RideOffer.id | id | Y | Y | ENT-13. |
+| RideOffer.rideRequestId | id | Y | N | Tham chiếu RideRequest. |
+| RideOffer.driverId | id | Y | N | Một driver tối đa một PENDING. |
+| RideOffer.expiresAt | thời điểm | Y | N | Hạn offer 20 giây. |
+| RideOffer.status | enum | Y | N | PENDING/ACCEPTED/DECLINED/EXPIRED/CANCELLED. |
+| RideOffer.version | số nguyên | Y | N | Optimistic concurrency. |
+| StatusHistory.id | id | Y | Y | ENT-15. |
+| StatusHistory.aggregateType | enum | Y | N | RideRequest hoặc Trip. |
+| StatusHistory.aggregateId | id | Y | N | ID aggregate nguồn. |
+| StatusHistory.fromStatus | text(40) | N | N | Null khi khởi tạo. |
+| StatusHistory.toStatus | text(40) | Y | N | Trạng thái mới. |
+| StatusHistory.actorId | id | N | N | `ref → BC-01`; null cho SYSTEM. |
+| StatusHistory.at | thời điểm | Y | N | Append-only. |
 
-Quan hệ: RideRequest 1–N RideOffer; RideRequest 0–1 Trip; Trip 0–1 Rating; RideRequest/Trip 1–N StatusHistory. Invariant: customer tối đa một request/trip mở; không mở offer sau giây 160; offer kết thúc ≤180; tối đa 9 offer từ trần 10 candidate; ACCEPT cạnh tranh chỉ một winner; hủy Trip chỉ trước PICKED_UP, sau đó dùng Incident.
+Quan hệ: RideRequest 1–N RideOffer; RideRequest 0–1 Trip; Trip 0–1 Rating; RideRequest/Trip 1–N StatusHistory. Invariant: customer tối đa một request/trip mở; driver tối đa một Trip ở trạng thái mở và một RideOffer PENDING; không mở offer sau giây 160; offer kết thúc ≤180; tối đa 9 offer từ trần 10 candidate; ACCEPT cạnh tranh chỉ một winner; hủy Trip chỉ trước PICKED_UP, sau đó dùng Incident.
 
 ```mermaid
 erDiagram
@@ -738,6 +868,8 @@ Database `cab_ride_db`, user `cab_ride`. ACCEPT cạnh tranh, version/state tran
 ##### 5.2. Mô hình vật lý
 
 `ride_requests`, `ride_offers`, `trips`, `ratings`, `status_history`, `idempotency_records`, `outbox_events`. Index: partial unique customer request mở; partial unique driver offer PENDING; `(ride_request_id,status,expires_at)`; `(customer_id,status)`; `(driver_id,status)`.
+
+Mọi field logic ánh xạ sang cột `snake_case` cùng tên; `pickup` và `destination` tách thành cặp `*_lat/*_lng`. Các cột `search_started_at`, `state` của idempotency và metadata retry/publish của outbox là cột kỹ thuật. Bốn snapshot tài xế đều nằm trong `trips`; tên và biển số dùng `*_ciphertext`, còn `*_nonce`, `*_key_version` chỉ là metadata mã hóa vật lý.
 
 ```sql
 CREATE TABLE ride_requests (
@@ -767,10 +899,36 @@ CREATE TABLE trips (
   id uuid PRIMARY KEY,
   ride_request_id uuid NOT NULL UNIQUE REFERENCES ride_requests(id),
   driver_id uuid NOT NULL,
+  driver_full_name_ciphertext bytea NOT NULL,
+  driver_full_name_nonce bytea NOT NULL,
+  driver_full_name_key_version text NOT NULL,
+  driver_plate_ciphertext bytea NOT NULL,
+  driver_plate_nonce bytea NOT NULL,
+  driver_plate_key_version text NOT NULL,
+  driver_vehicle_type_snapshot varchar(30) NOT NULL,
+  driver_rating_average_snapshot numeric(2,1),
   status varchar(32) NOT NULL,
   distance_meters integer,
   distance_source varchar(32),
   version integer NOT NULL CHECK (version > 0)
+);
+CREATE UNIQUE INDEX uq_open_trip_driver ON trips(driver_id)
+  WHERE status IN ('ASSIGNED','ARRIVED_AT_PICKUP','PICKED_UP','IN_PROGRESS');
+CREATE TABLE ratings (
+  id uuid PRIMARY KEY,
+  trip_id uuid NOT NULL UNIQUE REFERENCES trips(id),
+  customer_id uuid NOT NULL,
+  score smallint NOT NULL CHECK (score BETWEEN 1 AND 5),
+  comment varchar(500)
+);
+CREATE TABLE status_history (
+  id uuid PRIMARY KEY,
+  aggregate_type varchar(20) NOT NULL,
+  aggregate_id uuid NOT NULL,
+  from_status varchar(40),
+  to_status varchar(40) NOT NULL,
+  actor_id uuid,
+  at timestamptz NOT NULL
 );
 CREATE TABLE idempotency_records (
   subject_id uuid NOT NULL,
@@ -855,8 +1013,8 @@ stateDiagram-v2
 - Service/database/container/port: `billing-service` / `cab_billing_db` / `billing-service` / 8083; health `/health`, readiness `/ready`.
 - API sở hữu: API-18–API-23.
 - Aggregate root: PriceVersion, Fare, Payment; PaymentAttempt là entity trong Payment aggregate.
-- Phát: `FareFinalized`, `FareReviewRequired`, `PaymentStatusChanged`, `AuditRecorded`.
-- Tiêu thụ: `RideRequested` để giữ quote/version, `TripCompleted` để chốt Fare.
+- Phát: `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1`, `AuditRecorded.v1`.
+- Tiêu thụ: `TripCompleted.v1` để chốt Fare. Quote/PriceVersion đã trả đồng bộ qua API-18 nên không tiêu thụ `RideRequested`.
 - REST: Ride gọi estimate; Operations gọi Fare review. Callback API-23 không JWT, bắt buộc `X-Signature: sha256=<64 hex>` theo SRS §12.1.2.
 
 #### Bước 4. Mô hình dữ liệu logic
@@ -868,14 +1026,34 @@ stateDiagram-v2
 | PaymentAttempt | ENT-14 | entity | Một lần thử sandbox của Payment. |
 | PriceVersion | ENT-16 | aggregate root | Phiên bản biểu giá bất biến theo lịch sử. |
 
-| Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| Field | Kiểu logic | Bắt buộc (Y/N) | Duy nhất (Y/N) | Ràng buộc/Nguồn SRS |
 | --- | --- | --- | --- | --- |
-| Fare.id / tripId / priceVersionId | id / id / id | Y/Y/Y | id,tripId | tripId `ref → BC-02`. |
-| Fare.distanceMeters / distanceSource / amountVnd | số nguyên / enum / tiền | N/N/N | N | amount null khi review. |
-| Fare.status / version | enum / số nguyên | Y/Y | N | PENDING/FARE_REVIEW_REQUIRED/FINALIZED. |
-| Payment.id / tripId / method / status / paidAt / version | id / id / enum / enum / thời điểm / số nguyên | Y/Y/Y/Y/N/Y | id,tripId | UNPAID→PENDING→SUCCEEDED/FAILED/UNKNOWN. |
-| PaymentAttempt.id / paymentId / scenario / providerRef / status | id / id / enum / text(100) / enum | Y/Y/Y/N/Y | id,providerRef nếu có | scenario theo DEC-27. |
-| PriceVersion.id / vehicleTypeId / baseFareVnd / includedMeters / perKmVnd / effectiveAt / status | id / id / tiền / số nguyên / tiền / thời điểm / enum | Y | id | vehicleTypeId ref BC-01; DRAFT→ACTIVE→RETIRED. |
+| Fare.id | id | Y | Y | ENT-08. |
+| Fare.tripId | id | Y | Y | `ref → BC-02`; một Fare/Trip. |
+| Fare.priceVersionId | id | Y | N | Tham chiếu PriceVersion đã quote. |
+| Fare.distanceMeters | số nguyên | N | N | Không âm; null khi chờ review. |
+| Fare.distanceSource | enum | N | N | GPS/OPERATOR_ESTIMATE. |
+| Fare.amountVnd | tiền | N | N | Null khi FARE_REVIEW_REQUIRED. |
+| Fare.status | enum | Y | N | PENDING/FARE_REVIEW_REQUIRED/FINALIZED. |
+| Fare.version | số nguyên | Y | N | Optimistic concurrency. |
+| Payment.id | id | Y | Y | ENT-09. |
+| Payment.tripId | id | Y | Y | Một Payment/Trip. |
+| Payment.method | enum | Y | N | CASH/SANDBOX. |
+| Payment.status | enum | Y | N | UNPAID→PENDING→SUCCEEDED/FAILED/UNKNOWN. |
+| Payment.paidAt | thời điểm | N | N | Có khi thanh toán thành công. |
+| Payment.version | số nguyên | Y | N | Optimistic concurrency. |
+| PaymentAttempt.id | id | Y | Y | ENT-14. |
+| PaymentAttempt.paymentId | id | Y | N | Thuộc Payment aggregate. |
+| PaymentAttempt.scenario | enum | Y | N | DEC-27. |
+| PaymentAttempt.providerRef | text(100) | N | Y | Duy nhất khi provider trả ref. |
+| PaymentAttempt.status | enum | Y | N | Trạng thái lần thử. |
+| PriceVersion.id | id | Y | Y | ENT-16. |
+| PriceVersion.vehicleTypeId | id | Y | N | `ref → BC-01`. |
+| PriceVersion.baseFareVnd | tiền | Y | N | Không âm. |
+| PriceVersion.includedMeters | số nguyên | Y | N | Không âm. |
+| PriceVersion.perKmVnd | tiền | Y | N | Không âm. |
+| PriceVersion.effectiveAt | thời điểm | Y | N | Mốc bắt đầu hiệu lực. |
+| PriceVersion.status | enum | Y | N | DRAFT→ACTIVE→RETIRED. |
 
 Quan hệ: PriceVersion 1–N Fare; Fare 1–1 Trip logic; Trip logic 1–1 Payment; Payment 1–N PaymentAttempt. Invariant: PriceVersion của request không đổi; Fare FINALIZED bất biến; PENDING/UNKNOWN chặn attempt/phương thức mới; callback trùng không thu đôi; chỉ retry sau FAILED, tối đa hai lần.
 
@@ -896,7 +1074,18 @@ Database `cab_billing_db`, user `cab_billing`. Fare/Payment 1–1 Trip, số ti�
 
 `price_versions`, `fares`, `payments`, `payment_attempts`, `idempotency_records`, `provider_events`, `outbox_events`. Unique `fares.trip_id`, `payments.trip_id`, `payment_attempts.provider_ref`; index `(payment_id,status)` và `(status,effective_at)`.
 
+Mọi field logic ánh xạ sang cột `snake_case` cùng tên. `provider_events`, `state` của idempotency và metadata retry/publish của outbox là cấu trúc kỹ thuật, không thay thế field nghiệp vụ.
+
 ```sql
+CREATE TABLE price_versions (
+  id uuid PRIMARY KEY,
+  vehicle_type_id uuid NOT NULL,
+  base_fare_vnd bigint NOT NULL CHECK (base_fare_vnd >= 0),
+  included_meters integer NOT NULL CHECK (included_meters >= 0),
+  per_km_vnd bigint NOT NULL CHECK (per_km_vnd >= 0),
+  effective_at timestamptz NOT NULL,
+  status varchar(12) NOT NULL CHECK (status IN ('DRAFT','ACTIVE','RETIRED'))
+);
 CREATE TABLE fares (
   id uuid PRIMARY KEY,
   trip_id uuid NOT NULL UNIQUE,
@@ -994,7 +1183,8 @@ flowchart LR
 - Service/database/container/port: `notification-service` / `cab_notification_db` / `notification-service` / 8084; `/health`, `/ready`.
 - API sở hữu: API-24–API-26.
 - Aggregate root: Notification.
-- Phát: `NotificationRead`, delivery metric; tiêu thụ Ride/Billing/Identity domain events.
+- Phát: `AuditRecorded.v1` khi đánh dấu READ.
+- Tiêu thụ: `DriverApplicationDecided.v1`, `RideRequested.v1`, `RideOfferCreated.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1`, `IncidentResolved.v1`.
 - Không gọi đồng bộ service nguồn; SSE payload chứa resource ID để client GET owner API xác nhận.
 - CUSTOMER/DRIVER chỉ đọc recipientId bằng JWT `sub`.
 
@@ -1004,13 +1194,15 @@ flowchart LR
 | --- | --- | --- | --- |
 | Notification | ENT-10 | aggregate root | Inbox idempotent theo recipientId+eventId. |
 
-| Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| Field | Kiểu logic | Bắt buộc (Y/N) | Duy nhất (Y/N) | Ràng buộc/Nguồn SRS |
 | --- | --- | --- | --- | --- |
 | id | id | Y | Y | ID thông báo. |
 | recipientId | id | Y | cặp với eventId | `ref → BC-01`; actor sở hữu. |
 | eventId | id | Y | cặp với recipientId | Dedupe at-least-once. |
 | type | text(64) | Y | N | Loại domain event cho client. |
 | readAt | thời điểm | N | N | null=CREATED, có giá trị=READ. |
+| resource | JSON | Y | N | Snapshot tối thiểu để client định tuyến tới resource nguồn. |
+| createdAt | thời điểm | Y | N | Cursor SSE/inbox, do server tạo. |
 
 Quan hệ logic: một recipient có nhiều Notification; event có tối đa một Notification/recipient. Invariant: chỉ CREATED→READ, không unread; lỗi ghi/SSE không đảo giao dịch nguồn; Last-Event-ID chỉ checkpoint delivery, không thay đổi nghiệp vụ.
 
@@ -1027,6 +1219,8 @@ erDiagram
 Database `cab_notification_db`, user `cab_notification`. Dedupe `(recipientId,eventId)`, chuyển READ một chiều và phân trang ổn định cần unique/index; `resource` linh hoạt lưu `jsonb`. SSE connection registry giữ trong bộ nhớ tiến trình, còn reconnect dùng Last-Event-ID đọc lại bản ghi bền vững.
 
 ##### 5.2. Mô hình vật lý
+
+Mỗi field logic của Notification ánh xạ trực tiếp sang cột `snake_case` cùng tên; không có cột nghiệp vụ ẩn hoặc bị lược bỏ.
 
 ```sql
 CREATE TABLE notifications (
@@ -1094,8 +1288,8 @@ stateDiagram-v2
 - Service/database/container/port: `operations-reporting-service` / `cab_operations_db` / `operations-reporting-service` / 8085; `/health`, `/ready`.
 - API sở hữu: API-27–API-30; quản trị contract API-X01–X03, thực thi health ở Gateway.
 - Aggregate root: Incident, ReportProjection; AuditLog append-only.
-- Phát: `IncidentCreated`, `IncidentResolved`, `TerminateTripRequested`, `FareReviewRequested`, `AuditRecorded` của thao tác nội bộ.
-- Tiêu thụ: toàn bộ `AuditRecorded`, Ride/Billing events để dựng projection.
+- Phát: `IncidentResolved.v1`, `AuditRecorded.v1`. Lệnh kết thúc Trip/Fare review đi REST, không phát command event.
+- Tiêu thụ: `DriverLocationUpdated.v1`, `DriverApplicationDecided.v1`, `RideRequested.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `TripCompleted.v1`, `RatingCreated.v1`, `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1`, `AuditRecorded.v1` để dựng audit/projection.
 - REST: gửi command có Idempotency-Key tới Ride/Billing; không cập nhật database của chúng.
 
 #### Bước 4. Mô hình dữ liệu logic
@@ -1108,21 +1302,43 @@ stateDiagram-v2
 | OutboxEvent | ENT-24 | entity kỹ thuật chuẩn | Contract outbox; instance cục bộ ở từng service. |
 | ReportProjection | ENT-28 | aggregate root/read model | Metric theo ngày và dimensions. |
 
-| Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| Field | Kiểu logic | Bắt buộc (Y/N) | Duy nhất (Y/N) | Ràng buộc/Nguồn SRS |
 | --- | --- | --- | --- | --- |
-| AuditRecord.id / eventId / actorId / action / targetId / beforeAfter | id / id / id / text(80) / id / JSON | Y/Y/N/Y/Y/N | id,eventId | actorId ref BC-01; diff đã mask. |
-| AuditLog.id / auditRecordId / traceId / occurredAt | id / id / text(64) / thời điểm | Y | id,auditRecordId | Append-only. |
-| Incident.id / tripId / source / reason / status / resolution / version | id / id / enum / text(500) / enum / enum / số nguyên | Y/Y/Y/Y/Y/N/Y | id | tripId `ref → BC-02`; reason có thể nhạy cảm. |
-| OutboxEvent.id / aggregateId / eventType / payload / occurredAt / publishedAt | id / id / text(100) / JSON / thời điểm / thời điểm | Y/Y/Y/Y/Y/N | id | Append cùng transaction aggregate. |
-| ReportProjection.metricDate / dimensions / metrics / sourceEventId | ngày / JSON / JSON / id | Y | sourceEventId | Timezone Asia/Ho_Chi_Minh; rebuild được. |
+| AuditRecord.id | id | Y | Y | ENT-12. |
+| AuditRecord.eventId | id | Y | Y | ID event nguồn. |
+| AuditRecord.actorId | id | N | N | `ref → BC-01`; null cho SYSTEM. |
+| AuditRecord.action | text(80) | Y | N | Hành động nghiệp vụ. |
+| AuditRecord.targetId | id | Y | N | Aggregate bị tác động. |
+| AuditRecord.beforeAfter | JSON | N | N | Diff đã mask tại nguồn. |
+| AuditLog.id | id | Y | Y | ENT-17. |
+| AuditLog.auditRecordId | id | Y | Y | Dedupe AuditRecord. |
+| AuditLog.traceId | text(64) | Y | N | Correlation xuyên service. |
+| AuditLog.occurredAt | thời điểm | Y | N | Append-only. |
+| Incident.id | id | Y | Y | ENT-18. |
+| Incident.tripId | id | Y | N | `ref → BC-02`. |
+| Incident.source | enum | Y | N | CUSTOMER/DRIVER/OPERATOR/SYSTEM. |
+| Incident.reason | text(500) | Y | N | Lý do tạo sự cố. |
+| Incident.status | enum | Y | N | OPEN→IN_PROGRESS→RESOLVED→CLOSED. |
+| Incident.resolution | enum | N | N | Có khi xử lý. |
+| Incident.version | số nguyên | Y | N | Optimistic concurrency. |
+| OutboxEvent.id | id | Y | Y | ENT-24. |
+| OutboxEvent.aggregateId | id | Y | N | Aggregate nguồn. |
+| OutboxEvent.eventType | text(100) | Y | N | Tên event có version. |
+| OutboxEvent.payload | JSON | Y | N | Contract event. |
+| OutboxEvent.occurredAt | thời điểm | Y | N | Thời điểm nghiệp vụ. |
+| OutboxEvent.publishedAt | thời điểm | N | N | Null trước khi publish. |
+| ReportProjection.metricDate | ngày | Y | N | Asia/Ho_Chi_Minh. |
+| ReportProjection.dimensions | JSON | Y | N | Các chiều báo cáo. |
+| ReportProjection.metrics | JSON | Y | N | Các số đo tổng hợp. |
+| ReportProjection.sourceEventId | id | Y | Y | Một projection/source event; rebuild được. |
 
-Quan hệ: TripRef 1–N Incident; AuditRecord 1–1 AuditLog; source Event 1–N projection cell theo dimension. Invariant: một Incident SYSTEM cho mỗi trip/type/ngưỡng; đúng 30 phút chưa tạo, 30:00.001 mới tạo; resolution không sửa Payment; consumer audit/projection idempotent.
+Quan hệ: TripRef 1–N Incident; AuditRecord 1–1 AuditLog; một source Event tạo đúng một ReportProjection chứa toàn bộ dimensions/metrics liên quan. Invariant: một Incident SYSTEM cho mỗi trip/type/ngưỡng; đúng 30 phút chưa tạo, 30:00.001 mới tạo; resolution không sửa Payment; consumer audit/projection idempotent.
 
 ```mermaid
 erDiagram
   TripRef ||--o{ Incident : has
   AuditRecord ||--|| AuditLog : materializes
-  SourceEventRef ||--o{ ReportProjection : updates
+  SourceEventRef ||--|| ReportProjection : updates
 ```
 
 #### Bước 5. CSDL
@@ -1133,7 +1349,9 @@ Database `cab_operations_db`, user `cab_operations`. Incident theo version, audi
 
 ##### 5.2. Mô hình vật lý
 
-`incidents`, `audit_logs`, `report_projections`, `active_trip_projections`, `processed_events`, `outbox_events`. Unique `(trip_id,source,reason_code)` cho incident hệ thống; unique `audit_record_id`, `source_event_id`; index `(status,created_at)`, GIN dimensions, `(metric_date)`.
+`incidents`, `audit_logs`, `report_projections`, `active_trip_projections`, `processed_events`, `outbox_events`. Scheduler chống trùng Incident SYSTEM bằng idempotency key suy ra từ `(trip_id, threshold_type)` trong `processed_events`; unique `audit_record_id`, `source_event_id`; index `(status,created_at)`, GIN dimensions, `(metric_date)`.
+
+Mọi field Incident, AuditLog và ReportProjection ánh xạ sang cột `snake_case` cùng tên. `AuditRecord` là payload nguồn: `id` ánh xạ `audit_record_id`, còn `eventId/actorId/action/targetId/beforeAfter` nằm trong `masked_record`; `OutboxEvent` ánh xạ trực tiếp vào `outbox_events`. `active_trip_projections`, `processed_events`, `created_at` của Incident và metadata retry/publish của outbox là cấu trúc kỹ thuật vật lý.
 
 ```sql
 CREATE TABLE incidents (
@@ -1143,7 +1361,8 @@ CREATE TABLE incidents (
   reason varchar(500) NOT NULL,
   status varchar(16) NOT NULL CHECK (status IN ('OPEN','IN_PROGRESS','RESOLVED','CLOSED')),
   resolution varchar(24),
-  version integer NOT NULL CHECK (version > 0)
+  version integer NOT NULL CHECK (version > 0),
+  created_at timestamptz NOT NULL
 );
 CREATE TABLE audit_logs (
   id uuid PRIMARY KEY,
@@ -1157,6 +1376,14 @@ CREATE TABLE report_projections (
   dimensions jsonb NOT NULL,
   metrics jsonb NOT NULL,
   source_event_id uuid NOT NULL UNIQUE
+);
+CREATE TABLE outbox_events (
+  id uuid PRIMARY KEY,
+  aggregate_id uuid NOT NULL,
+  event_type varchar(100) NOT NULL,
+  payload jsonb NOT NULL,
+  occurred_at timestamptz NOT NULL,
+  published_at timestamptz
 );
 ```
 
@@ -1199,18 +1426,24 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm d
 
 ### III.2. Hợp đồng event
 
-| Event v1 | Producer | Consumer | Payload chính | Khóa/dedupe |
-| --- | --- | --- | --- | --- |
-| `DriverLocationUpdated.v1` | BC-01 | BC-02, BC-05 | eventId, driverId, lat, lng, receivedAt, tripId | eventId; driverId+receivedAt |
-| `RideRequested.v1` | BC-02 | BC-04, BC-05 | eventId, rideRequestId, vehicleTypeId, pickup, occurredAt | eventId |
-| `RideOfferCreated.v1` | BC-02 | BC-04 | eventId, offerId, driverId, expiresAt | eventId+recipientId |
-| `RideAssigned.v1` | BC-02 | BC-01, BC-04, BC-05 | eventId, tripId, customerId, driverId, version | eventId; tripId+version |
-| `TripStatusChanged.v1` | BC-02 | BC-01, BC-03, BC-04, BC-05 | eventId, tripId, from, to, version, occurredAt | eventId; tripId+version |
-| `TripCompleted.v1` | BC-02 | BC-03, BC-05 | eventId, tripId, vehicleTypeId, priceVersionId, distanceMeters | eventId; tripId+version |
-| `FareFinalized.v1` | BC-03 | BC-04, BC-05 | eventId, fareId, tripId, amountVnd, status, version | eventId; fareId+version |
-| `PaymentStatusChanged.v1` | BC-03 | BC-04, BC-05 | eventId, paymentId, attemptId, status, paidAt | eventId; attemptId+status |
-| `IncidentResolved.v1` | BC-05 | BC-02, BC-03, BC-04 | eventId, incidentId, tripId, resolution, version | eventId; incidentId+version |
-| `AuditRecorded.v1` | BC-01–05 | BC-05 | eventId, actorId, action, targetId, occurredAt, maskedDiff | eventId |
+Đây là bảng event chuẩn duy nhất; bảng queue ở 0.7 là ánh xạ vận chuyển của từng cặp event–consumer.
+
+| Event v1 | Producer | Consumer → queue | Payload chính | Khóa/dedupe | Xử lý lỗi |
+| --- | --- | --- | --- | --- | --- |
+| `DriverApplicationDecided.v1` | BC-01 | BC-04 → `identity.notification`; BC-05 → `identity.operations` | eventId, applicationId, driverId, status, version | eventId | retry/DLQ từng queue |
+| `DriverLocationUpdated.v1` | BC-01 | BC-02 → `identity.ride-location`; BC-05 → `identity.operations` | eventId, driverId, lat, lng, receivedAt, tripId | eventId; driverId+receivedAt | Bỏ event cũ; retry/DLQ |
+| `RideRequested.v1` | BC-02 | BC-04 → `ride.notification`; BC-05 → `ride.operations` | eventId, rideRequestId, vehicleTypeId, pickup, occurredAt | eventId | retry/DLQ |
+| `RideOfferCreated.v1` | BC-02 | BC-04 → `ride.notification` | eventId, offerId, driverId, expiresAt | eventId+recipientId | retry 1/5/25 giây rồi DLQ |
+| `RideAssigned.v1` | BC-02 | BC-01 → `ride.identity-state`; BC-04 → `ride.notification`; BC-05 → `ride.operations` | eventId, tripId, customerId, driverId, version | eventId; tripId+version | retry/DLQ |
+| `RideRequestCancelled.v1` | BC-02 | BC-04 → `ride.notification`; BC-05 → `ride.operations` | eventId, rideRequestId, actorId, version | eventId; aggregate+version | retry/DLQ |
+| `TripStatusChanged.v1` | BC-02 | BC-01 → `ride.identity-state`; BC-04 → `ride.notification`; BC-05 → `ride.operations` | eventId, tripId, from, to, version, occurredAt | eventId; tripId+version | Bỏ version cũ; retry/DLQ |
+| `TripCompleted.v1` | BC-02 | BC-03 → `ride.billing`; BC-05 → `ride.operations` | eventId, tripId, vehicleTypeId, priceVersionId, distanceMeters | eventId; tripId+version | Billing retry/DLQ, không tạo Fare đôi |
+| `RatingCreated.v1` | BC-02 | BC-05 → `ride.operations` | eventId, ratingId, tripId, driverId, score | eventId | retry/DLQ |
+| `FareFinalized.v1` | BC-03 | BC-04 → `billing.notification`; BC-05 → `billing.operations` | eventId, fareId, tripId, amountVnd, status, version | eventId; fareId+version | retry/DLQ |
+| `FareReviewRequired.v1` | BC-03 | BC-04 → `billing.notification`; BC-05 → `billing.operations` | eventId, fareId, tripId, reason, version | eventId; fareId+version | retry/DLQ |
+| `PaymentStatusChanged.v1` | BC-03 | BC-04 → `billing.notification`; BC-05 → `billing.operations` | eventId, paymentId, attemptId, status, paidAt | eventId; attemptId+status | retry/DLQ; không downgrade SUCCEEDED |
+| `IncidentResolved.v1` | BC-05 | BC-04 → `operations.notification` | eventId, incidentId, tripId, resolution, version | eventId; incidentId+version | retry 1/5/25 giây rồi DLQ |
+| `AuditRecorded.v1` | BC-01–05 | BC-05 → `operations.audit` | eventId, actorId, action, targetId, occurredAt, maskedDiff | eventId | retry/DLQ; append-only |
 
 ### III.3. Ranh giới giao dịch và xử lý thất bại
 

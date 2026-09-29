@@ -52,6 +52,10 @@ def exact_once(label: str, actual: list, expected: set) -> tuple[bool,list[str]]
     return not errors,errors
 
 
+def event_names(text: str) -> set[str]:
+    return set(re.findall(r"`([A-Z][A-Za-z]+\.v1)`", text))
+
+
 def main() -> int:
     doc=DOC.read_text(encoding="utf-8")
     srs=SRS.read_text(encoding="utf-8")
@@ -70,12 +74,75 @@ def main() -> int:
         end=f"### BC-{bc+1:02d} —" if bc<5 else "## Phần III."
         bc_text=section(doc,start,end)
         logic=section(bc_text,"#### Bước 4.","#### Bước 5.")
-        ent_actual.extend(int(x) for x in re.findall(r"ENT-(\d{2})",logic))
+        entity_table=logic.split("| Field |",1)[0]
+        ent_actual.extend(int(x) for x in re.findall(r"ENT-(\d{2})",entity_table))
         hits=re.findall(r"\b(PostgreSQL|MongoDB|Redis|table|collection|index)\b",logic,re.I)
         if hits: forbidden.append(f"BC-{bc:02d}: {hits}")
     _,errors=exact_once("ENT",ent_actual,set(range(1,29)))
     ok &= report("28 ENT owned exactly once in Step 4",errors)
     ok &= report("Step 4 is technology independent",forbidden)
+
+    grouped_fields=[]
+    for bc in range(1,6):
+        start=f"### BC-{bc:02d} —"
+        end=f"### BC-{bc+1:02d} —" if bc<5 else "## Phần III."
+        logic=section(section(doc,start,end),"#### Bước 4.","#### Bước 5.")
+        for field in re.findall(r"^\| ([A-Za-z][A-Za-z0-9.]+(?:\s*/\s*[^|]+)?) \|",logic,re.M):
+            if "/" in field: grouped_fields.append(f"BC-{bc:02d}: {field}")
+    ok &= report("one logical field per Step 4 row",grouped_fields)
+
+    route_block=section(doc,"### 0.3.","### 0.4.")
+    route_rows=re.findall(
+        r"^\| (GET|POST|PUT|PATCH|DELETE) \| `([^`]+)` \((API-(?:X\d{2}|\d{2}))\) \| ([^|]+) \| ([^|]+) \|$",
+        route_block,re.M
+    )
+    route_ids=[row[2] for row in route_rows]
+    expected_routes={f"API-{n:02d}" for n in range(1,31)} | {f"API-X{n:02d}" for n in range(1,13)}
+    _,errors=exact_once("gateway route",route_ids,expected_routes)
+    if len(route_rows)!=42: errors.append(f"route rows={len(route_rows)}, expected 42")
+    ok &= report("42 gateway routes listed exactly once",errors)
+
+    event_block=section(doc,"### III.2.","### III.3.")
+    contract_rows=re.findall(
+        r"^\| `([A-Z][A-Za-z]+\.v1)` \| ([^|]+) \| ([^|]+) \|",
+        event_block,re.M
+    )
+    produced={f"BC-{n:02d}":set() for n in range(1,6)}
+    consumed={f"BC-{n:02d}":set() for n in range(1,6)}
+    event_queue_pairs=[]
+    for event,producer,consumers in contract_rows:
+        if producer.strip()=="BC-01–05":
+            for bc in produced: produced[bc].add(event)
+        else:
+            for bc in re.findall(r"BC-\d{2}",producer): produced[bc].add(event)
+        for bc,queue in re.findall(r"(BC-\d{2}) → `([^`]+)`",consumers):
+            consumed[bc].add(event)
+            event_queue_pairs.append((event,queue))
+
+    event_errors=[]
+    for n in range(1,6):
+        bc=f"BC-{n:02d}"
+        start=f"### {bc} —"
+        end=f"### BC-{n+1:02d} —" if n<5 else "## Phần III."
+        bc_text=section(doc,start,end)
+        emitted_match=re.search(r"^- Phát:(.+)$",bc_text,re.M)
+        consumed_match=re.search(r"^- Tiêu thụ:(.+)$",bc_text,re.M)
+        actual_emitted=event_names(emitted_match.group(1)) if emitted_match else set()
+        actual_consumed=event_names(consumed_match.group(1)) if consumed_match else set()
+        if actual_emitted!=produced[bc]:
+            event_errors.append(f"{bc} emitted actual={sorted(actual_emitted)} contract={sorted(produced[bc])}")
+        if actual_consumed!=consumed[bc]:
+            event_errors.append(f"{bc} consumed actual={sorted(actual_consumed)} contract={sorted(consumed[bc])}")
+    ok &= report("BC emitted/consumed events match III.2",event_errors)
+
+    queue_block=section(doc,"### 0.7.","## Phần II.")
+    queue_events={}
+    for line in queue_block.splitlines():
+        match=re.match(r"^\| `cab\.(?:domain|audit)` / `([^`]+)` \|[^|]+\|[^|]+\| ([^|]+) \|",line)
+        if match: queue_events[match.group(1)]=event_names(match.group(2))
+    pair_errors=[f"{event} → {queue}" for event,queue in event_queue_pairs
+                 if event not in queue_events.get(queue,set())]
+    ok &= report("every event-consumer pair has a broker queue",pair_errors)
 
     trace=section(doc,"### III.4.","## Phần IV.")
     fr=expand_numeric(table_block(trace,"| BC | FR sở hữu |"),"FR")

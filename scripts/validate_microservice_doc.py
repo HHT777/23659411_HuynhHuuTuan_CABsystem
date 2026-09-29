@@ -5,10 +5,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "microservice.md"
 SRS = ROOT / "SRS.md"
 RUBRIC = ROOT / "phieucham.md"
+MANIFEST = ROOT / "api_document" / "_manifest.yaml"
 
 
 def section(text: str, start: str, end: str | None = None) -> str:
@@ -101,6 +104,26 @@ def main() -> int:
     _,errors=exact_once("gateway route",route_ids,expected_routes)
     if len(route_rows)!=42: errors.append(f"route rows={len(route_rows)}, expected 42")
     ok &= report("42 gateway routes listed exactly once",errors)
+
+    route_by_id={api_id:(method,path.removeprefix("/api/v1"),auth.strip())
+                 for method,path,api_id,_service,auth in route_rows}
+    manifest=yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
+    role_tokens=("Public","Authenticated","CUSTOMER","DRIVER","OPERATOR","ADMIN","EXECUTIVE","Mock Provider")
+    manifest_errors=[]
+    for item in manifest:
+        actual=route_by_id.get(item["api_id"])
+        if not actual:
+            manifest_errors.append(f'{item["api_id"]} missing route')
+            continue
+        method,path,auth=actual
+        actual_roles={role for role in role_tokens if re.search(rf"(?<![A-Za-z]){re.escape(role)}(?![A-Za-z])",auth)}
+        expected_roles=set(item["role"])
+        if (method,path,actual_roles)!=(item["method"],item["path"],expected_roles):
+            manifest_errors.append(
+                f'{item["api_id"]}: route={(method,path,sorted(actual_roles))}, '
+                f'manifest={(item["method"],item["path"],sorted(expected_roles))}'
+            )
+    ok &= report("baseline gateway method/path/role match manifest",manifest_errors)
 
     event_block=section(doc,"### III.2.","### III.3.")
     contract_rows=re.findall(

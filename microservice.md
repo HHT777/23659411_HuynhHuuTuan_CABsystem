@@ -507,7 +507,7 @@ BC-01 sở hữu danh tính, hồ sơ và điều kiện hoạt động của t�
 | --- | --- | --- |
 | FR | FR-01–06, FR-21, FR-43, FR-45, FR-47, FR-49–51 | Phone duy nhất; hồ sơ/xe hợp lệ; vị trí mới hơn thắng; khóa phiên; bảo mật/rate limit. |
 | UC | UC-01.1, 01.2, 02, 03.1, 03.2, 04, 08, 16.2, 16.3, 16.5, 16.6 | Bao phủ đăng ký, đăng nhập, hồ sơ, availability, location và quản trị tài khoản. |
-| DEC/NFR | DEC-02, 09, 18, 25, 26, 29, 30, 33, 35, 38; NFR-04–07, 09, 16 | Một phone/một role; 5 lần sai khóa 15 phút; location >300 giây tự OFFLINE; TLS/log masking. |
+| DEC/NFR | DEC-02, 09, 18, 25, 26, 29, 30, 33–35, 38; NFR-04–07, 09, 16 | Một phone/một role; 5 lần sai khóa 15 phút; idempotency; location >300 giây tự OFFLINE; TLS/log masking. |
 | Phiếu chấm | #9–13, #21–23, #24–29 | Account/driver smoke test, GEO 1 km, OTP/duyệt, availability và bảo mật. |
 
 Mục tiêu trong luồng: tạo actor hợp lệ trước đặt xe; cung cấp candidate/driver snapshot cho Ride; không quyết định ACCEPT hoặc Trip.
@@ -534,6 +534,7 @@ stateDiagram-v2
 - Tiêu thụ: `RideAssigned.v1`, `TripStatusChanged.v1` để cập nhật projection Availability.ON_TRIP; không bảo vệ invariant Trip và không sửa Trip.
 - REST ra ngoài: Ride internal query candidate/driver snapshot gọi vào BC này; BC này không gọi database khác.
 - Quyền: Public cho API-01/02/03; Authenticated cho API-04; CUSTOMER/DRIVER cho API-05; DRIVER cho API-06/07; ADMIN API-08; OPERATOR API-09/10.
+- Contract kỹ thuật: BC-01 quản trị DEC-34/ENT-23 và ENT-27; service áp dụng IdempotencyRecord cục bộ, OutboxEvent cục bộ theo contract ENT-24 của BC-05; rate limit được Gateway thực thi theo contract BC-01.
 
 API bổ sung theo phiếu chấm:
 
@@ -726,7 +727,7 @@ CREATE TABLE idempotency_records (
 
 Truy vấn phiếu #13 lọc bounding box quanh `10.776889,106.700806`, sau đó tính Haversine trong SQL và giữ `distance_meters<=1000`, sắp `(distanceMeters,driverId)`, lấy `limit+1` với `limit≤100`. Cursor là cặp cuối, ổn định hơn offset. `driver_current_locations` phục vụ truy vấn mới nhất; `driver_locations` giữ lịch sử ENT-07 để cộng quãng đường. Job xóa OTP/idempotency hết hạn; LoginAttempt được query trực tiếp trong cửa sổ 15 phút.
 
-Bảo vệ: password dùng Argon2id có salt (`123400` → `$argon2id$v=19$m=65536,t=3,p=1$ZGVtby1zYWx0$ZGVtby1oYXNo`), không mã hóa thuận nghịch. Phone/fullName/plate/fileKey dùng AES-256-GCM, lưu ciphertext/nonce/keyVersion; khóa ngoài DB, xoay theo version; phone/plate tìm bằng HMAC blind index. Tất cả query dùng parameter binding, DB user chỉ có quyền database này.
+Bảo vệ: password dùng Argon2id có salt; định dạng minh họa, không phải hash thật: `$argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>`. Password không mã hóa thuận nghịch. Phone/fullName/plate/fileKey dùng AES-256-GCM, lưu ciphertext/nonce/keyVersion; khóa ngoài DB, xoay theo version; phone/plate tìm bằng HMAC blind index. Tất cả query dùng parameter binding, DB user chỉ có quyền database này.
 
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
@@ -767,7 +768,7 @@ BC-02 giữ RideRequest, matching/offer và Trip chung để transaction ACCEPT 
 | --- | --- | --- |
 | FR | FR-07–20, FR-22, FR-28–30, FR-39, FR-48, FR-53 | Đặt xe, điều phối, state Trip, lịch sử và rating. |
 | UC | UC-05.1, 05.2, 06.1–06.3, 07.1–07.2, 09.1–09.2, 10, 14, 15 | Toàn bộ vòng đời request/offer/trip/rating. |
-| DEC/NFR | DEC-03–05, 13, 16, 17, 19, 20, 24, 34, 36; NFR-01–03, 11, 14 | 5 km, offer 20 giây, hard stop 180 giây, concurrency/version, ownership. |
+| DEC/NFR | DEC-03–05, 13, 16, 17, 19, 20, 24, 36; NFR-01–03, 11, 14 | 5 km, offer 20 giây, hard stop 180 giây, concurrency/version, ownership. |
 | Phiếu chấm | #14–18, #20, #30 | Booking list/create, accept, Trip sequence/cancel, review, replay. |
 
 ```mermaid
@@ -794,6 +795,7 @@ stateDiagram-v2
 - Phát: `RideRequested.v1`, `RideOfferCreated.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `TripCompleted.v1`, `RatingCreated.v1`, `AuditRecorded.v1`.
 - Tiêu thụ: `DriverLocationUpdated.v1` để cộng distance khi Trip IN_PROGRESS. Candidate/availability lấy đồng bộ, còn lệnh Incident dùng REST.
 - REST đồng bộ: query candidate/snapshot ở BC-01, fare estimate ở BC-03. Role/ownership theo manifest.
+- Contract kỹ thuật: service áp dụng DEC-34/IdempotencyRecord cục bộ và ENT-27 theo contract BC-01; OutboxEvent cục bộ theo contract ENT-24 của BC-05.
 
 `⚠ Giả định (bổ sung theo phiếu chấm)`: API-X07 dùng page 1..1000, size 1..100 như BC-12 và chỉ trả RideRequest của `sub`; SRS UC-14 có lịch sử nhưng §12.1 chưa có endpoint.
 
@@ -848,7 +850,7 @@ stateDiagram-v2
 | StatusHistory.actorId | id | N | N | `ref → BC-01`; null cho SYSTEM. |
 | StatusHistory.at | thời điểm | Y | N | Append-only. |
 
-Quan hệ: RideRequest 1–N RideOffer; RideRequest 0–1 Trip; Trip 0–1 Rating; RideRequest/Trip 1–N StatusHistory. Invariant: customer tối đa một request/trip mở; driver tối đa một Trip ở trạng thái mở và một RideOffer PENDING; không mở offer sau giây 160; offer kết thúc ≤180; tối đa 9 offer từ trần 10 candidate; ACCEPT cạnh tranh chỉ một winner; hủy Trip chỉ trước PICKED_UP, sau đó dùng Incident.
+Quan hệ: RideRequest 1–N RideOffer; RideRequest 0–1 Trip; Trip 0–1 Rating; RideRequest/Trip 1–N StatusHistory. Invariant: customer tối đa một request/trip mở; driver tối đa một Trip ở trạng thái mở và một RideOffer PENDING; không mở offer sau giây 160; offer kết thúc ≤180. Theo DEC-16, mỗi vòng chọn tối đa 3 candidate, tối đa 3 vòng, toàn phiên xét không quá 10 candidate và vì vậy phát tối đa 9 offer. ACCEPT cạnh tranh chỉ một winner; hủy Trip chỉ trước PICKED_UP, sau đó dùng Incident.
 
 ```mermaid
 erDiagram
@@ -990,22 +992,22 @@ Mục tiêu: báo giá trước đặt; nhận `TripCompleted` để tạo Fare;
 
 ```mermaid
 stateDiagram-v2
-  state Fare {
-    [*] --> PENDING
-    PENDING --> FINALIZED: distance hợp lệ
-    PENDING --> FARE_REVIEW_REQUIRED: <2 điểm hợp lệ
-    FARE_REVIEW_REQUIRED --> FINALIZED: OPERATOR verify distance
-  }
-  state Payment {
-    [*] --> UNPAID
-    UNPAID --> PENDING: create sandbox attempt
-    PENDING --> SUCCEEDED: valid callback/cash confirm
-    PENDING --> FAILED: final failure
-    PENDING --> UNKNOWN: timeout
-    FAILED --> PENDING: retry, tối đa 2
-    UNKNOWN --> SUCCEEDED: reconciliation
-    UNKNOWN --> FAILED: reconciliation
-  }
+  [*] --> PENDING
+  PENDING --> FINALIZED: distance hợp lệ
+  PENDING --> FARE_REVIEW_REQUIRED: <2 điểm hợp lệ
+  FARE_REVIEW_REQUIRED --> FINALIZED: OPERATOR verify distance
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> UNPAID
+  UNPAID --> PENDING: create sandbox attempt
+  PENDING --> SUCCEEDED: valid callback/cash confirm
+  PENDING --> FAILED: final failure
+  PENDING --> UNKNOWN: timeout
+  FAILED --> PENDING: retry, tối đa 2
+  UNKNOWN --> SUCCEEDED: reconciliation
+  UNKNOWN --> FAILED: reconciliation
 ```
 
 #### Bước 3. Microservice
@@ -1016,6 +1018,7 @@ stateDiagram-v2
 - Phát: `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1`, `AuditRecorded.v1`.
 - Tiêu thụ: `TripCompleted.v1` để chốt Fare. Quote/PriceVersion đã trả đồng bộ qua API-18 nên không tiêu thụ `RideRequested`.
 - REST: Ride gọi estimate; Operations gọi Fare review. Callback API-23 không JWT, bắt buộc `X-Signature: sha256=<64 hex>` theo SRS §12.1.2.
+- Contract kỹ thuật: service áp dụng DEC-34/IdempotencyRecord cục bộ và ENT-27 theo contract BC-01; OutboxEvent cục bộ theo contract ENT-24 của BC-05.
 
 #### Bước 4. Mô hình dữ liệu logic
 
@@ -1130,7 +1133,7 @@ CREATE TABLE idempotency_records (
 
 Callback insert `provider_events` trước; trùng PK trả kết quả đã có. Transaction khóa hàng Payment bằng `SELECT FOR UPDATE`, kiểm tra trạng thái rồi mới cập nhật PaymentAttempt/Payment và outbox. `idempotency_records` giữ thao tác review/cash/payment 24 giờ; job xóa bản hết hạn.
 
-Fare demo: MOTORBIKE 2.001 m → `10.000 + 1/1000×4.000 = 10.004`, làm tròn 11.000 VND; CAR_4_SEAT tương ứng 26.000 VND. Query dùng parameter binding; DB role riêng. CAB không lưu số thẻ/CVV/token provider. Callback secret ở secret store, không DB; log chỉ providerRef đã mask.
+Fare demo với quãng đường 2.001 m: MOTORBIKE có base 10.000 VND gồm 2.000 m, phần vượt `1 m × 4.000/1.000 = 4 VND`, tổng 10.004 VND và làm tròn lên bội 1.000 thành 11.000 VND. CAR_4_SEAT có base 25.000 VND gồm 2.000 m, phần vượt `1 m × 10.000/1.000 = 10 VND`, tổng 25.010 VND và làm tròn lên thành 26.000 VND. Query dùng parameter binding; DB role riêng. CAB không lưu số thẻ/CVV/token provider. Callback secret ở secret store, không DB; log chỉ providerRef đã mask.
 
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
@@ -1187,6 +1190,7 @@ flowchart LR
 - Tiêu thụ: `DriverApplicationDecided.v1`, `RideRequested.v1`, `RideOfferCreated.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1`, `IncidentResolved.v1`.
 - Không gọi đồng bộ service nguồn; SSE payload chứa resource ID để client GET owner API xác nhận.
 - CUSTOMER/DRIVER chỉ đọc recipientId bằng JWT `sub`.
+- Contract kỹ thuật: service áp dụng DEC-34/IdempotencyRecord cục bộ và ENT-27 theo contract BC-01; OutboxEvent cục bộ theo contract ENT-24 của BC-05.
 
 #### Bước 4. Mô hình dữ liệu logic
 
@@ -1291,6 +1295,7 @@ stateDiagram-v2
 - Phát: `IncidentResolved.v1`, `AuditRecorded.v1`. Lệnh kết thúc Trip/Fare review đi REST, không phát command event.
 - Tiêu thụ: `DriverLocationUpdated.v1`, `DriverApplicationDecided.v1`, `RideRequested.v1`, `RideAssigned.v1`, `RideRequestCancelled.v1`, `TripStatusChanged.v1`, `TripCompleted.v1`, `RatingCreated.v1`, `FareFinalized.v1`, `FareReviewRequired.v1`, `PaymentStatusChanged.v1`, `AuditRecorded.v1` để dựng audit/projection.
 - REST: gửi command có Idempotency-Key tới Ride/Billing; không cập nhật database của chúng.
+- Contract kỹ thuật: service áp dụng DEC-34/IdempotencyRecord cục bộ và ENT-27 theo contract BC-01; BC-05 quản trị ENT-24 và triển khai OutboxEvent cục bộ.
 
 #### Bước 4. Mô hình dữ liệu logic
 
@@ -1481,8 +1486,8 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm d
 
 | BC | DEC sở hữu |
 | --- | --- |
-| BC-01 | DEC-02, DEC-09, DEC-18, DEC-25, DEC-26, DEC-29, DEC-30, DEC-33, DEC-35, DEC-38 |
-| BC-02 | DEC-03, DEC-04, DEC-05, DEC-13, DEC-16, DEC-17, DEC-19, DEC-20, DEC-24, DEC-34, DEC-36 |
+| BC-01 | DEC-02, DEC-09, DEC-18, DEC-25, DEC-26, DEC-29, DEC-30, DEC-33, DEC-34, DEC-35, DEC-38 |
+| BC-02 | DEC-03, DEC-04, DEC-05, DEC-13, DEC-16, DEC-17, DEC-19, DEC-20, DEC-24, DEC-36 |
 | BC-03 | DEC-06, DEC-07, DEC-08, DEC-22, DEC-23, DEC-27, DEC-28 |
 | BC-04 | DEC-10, DEC-37 |
 | BC-05 | DEC-01, DEC-11, DEC-12, DEC-14, DEC-15, DEC-21, DEC-31, DEC-32 |
@@ -1497,11 +1502,23 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm d
 
 ENT-23/24 là mẫu kỹ thuật được triển khai cục bộ ở nhiều service, nhưng để đáp ứng quy tắc một chủ contract: BC-01 quản trị schema IdempotencyRecord, BC-05 quản trị schema OutboxEvent. ENT-27 là contract do BC-01 quản trị; Gateway giữ bộ đếm trong bộ nhớ và không có bảng vật lý. Gateway vẫn không trở thành BC và không có aggregate nghiệp vụ.
 
+### III.5. Thuật ngữ xuyên context dễ nhầm
+
+| Thuật ngữ | Ý nghĩa ở từng BC | Cách dùng thống nhất |
+| --- | --- | --- |
+| status | BC-01 có User.status, DriverApplication.status và Availability.status; BC-02 có RideRequest/Trip/RideOffer.status; BC-03 có Fare/Payment.status; BC-05 có Incident.status. | Luôn kèm tên aggregate; không truyền một enum status chung xuyên context. |
+| Driver | BC-01 sở hữu DriverProfile; BC-02 dùng Candidate khi matching và giữ driver snapshot trong Trip. | `driverId` là tham chiếu; Candidate/snapshot không phải bản sao aggregate DriverProfile. |
+| Fare / FareEstimate / quotedFareVnd | BC-03 sở hữu Fare cuối và tính FareEstimate; BC-02 chỉ giữ quotedFareVnd cùng priceVersionId trên RideRequest. | Dùng FareEstimate trước đặt, quotedFareVnd là snapshot báo giá, Fare là cước cuối. |
+| Review | BC-02 có Rating cho chuyến; BC-03 có Fare review do OPERATOR xác minh distance/cước. | Gọi rõ Rating hoặc Fare review; không tạo entity Review chung. |
+| Notification / SSE event | BC-04 lưu Notification inbox từ domain event; SSE là kênh giao bản tin tới client. | Notification là nguồn bền vững; SSE event không phải aggregate hoặc domain event mới. |
+| Trip / RideRequest | BC-02 tạo RideRequest lúc bắt đầu tìm xe và chỉ tạo Trip khi một offer ACCEPT thắng. | Không dùng Trip cho giai đoạn SEARCHING và không gọi RideRequest là chuyến đã gán. |
+| Audit | Service owner phát AuditRecord đã mask; BC-05 lưu AuditLog append-only. | Không ghi trực tiếp chéo database Operations; phân biệt payload event với bản lưu. |
+
 ## Phần IV. Bảo mật xuyên hệ thống
 
 ### IV.1. Xác thực và token
 
-Identity phát access JWT ký `RS256`, hạn 15 phút; claim tối thiểu `sub`, `role`, `iss=cab-identity`, `aud=cab-api`, `iat`, `exp`, `jti`. Refresh token opaque 30 ngày, xoay mỗi lần dùng và chỉ lưu hash; `⚠ Giả định`: SRS chốt cấu trúc token nhưng chưa chốt thuật toán/TTL. Gateway và service kiểm chữ ký bằng public key, không chấp nhận `alg=none`; khóa User thu hồi mọi refresh token và tăng `tokenVersion` để vô hiệu access token hiện tại.
+Identity phát access JWT ký `RS256`, hạn 15 phút; claim tối thiểu `sub`, `role`, `iss=cab-identity`, `aud=cab-api`, `iat`, `exp`, `jti`. Refresh token opaque 30 ngày, xoay mỗi lần dùng và chỉ lưu hash. Gateway và service kiểm chữ ký bằng public key, không chấp nhận `alg=none`. Khi khóa User, Identity thu hồi toàn bộ refresh token; access token đã phát có thể còn hiệu lực tối đa 15 phút. `⚠ Giả định`: SRS chưa chốt thuật toán/TTL và chấp nhận cửa sổ access tối đa 15 phút này ở pilot; muốn thu hồi tức thời phải bổ sung denylist/introspection ngoài phạm vi hiện tại.
 
 ### IV.2. Đe dọa và lớp chặn — Phiếu #24–30
 
@@ -1510,7 +1527,7 @@ Identity phát access JWT ký `RS256`, hạn 15 phút; claim tối thiểu `sub`
 | 24 | Đọc trực tiếp DB | Argon2id cho password; AES-256-GCM + nonce/keyVersion cho phone/name/plate; khóa ngoài DB; blind index HMAC. | 200 API nhưng DB chỉ thấy ciphertext/hash | Đăng ký password `CabPilot2026`, sau đó truy vấn DB qua test fixture xác nhận không có plaintext. |
 | 25 | SQL injection | JSON schema, parameter binding/ORM, allow-list sort/filter và user database tối thiểu; không nối chuỗi SQL. | 400/401 | POST `/api/v1/auth/login` body `{"phone":"' OR 1=1 --","password":"anything"}` → 400/401. |
 | 26 | Stored/reflected XSS | Lưu comment/reason như text; JSON encoder; UI escape; CSP `default-src 'self'`, `script-src 'self'`; `X-Content-Type-Options: nosniff`. | 201/200, script không chạy | POST rating comment `<script>alert('hack')</script>`; GET trả escaped/render như text. |
-| 27 | JWT tampering | RS256 signature, issuer/audience/expiry/tokenVersion; bỏ tin header role từ client. | 401 | Sửa `sub/role` trong `$customerToken`, GET `/api/v1/operations/trips/active` → 401. |
+| 27 | JWT tampering | RS256 signature, issuer/audience/expiry; bỏ tin header role từ client. | 401 | Sửa `sub/role` trong `$customerToken`, GET `/api/v1/operations/trips/active` → 401. |
 | 28 | Sai role/ownership | Gateway allow-list + service policy mặc định deny; query luôn scope theo `sub`. | 403 | CUSTOMER PUT `/api/v1/drivers/me/availability` → 403, không dữ liệu. |
 | 29 | Flood/rate attack | Gateway một instance đếm cửa sổ trong bộ nhớ theo IP/user. DEC-30: login 10/phút/IP, RideRequest 5/phút/user, location 12/phút/driver, chung 100/phút/user; trả `Retry-After`. | 429 | Gửi lần RideRequest thứ 6 trong phút → 429; restart Gateway làm mất cửa sổ hiện tại, là đánh đổi pilot. |
 | 30 | Replay/double charge | `Idempotency-Key` UUID, subject+key, payload SHA-256, state IN_PROGRESS/COMPLETED, TTL 24h; cùng payload trả response cũ, khác payload 409. Provider event dedupe. | status cũ/409 | Gửi API-21 hai lần với key `550e8400-e29b-41d4-a716-446655440099` → cùng paymentId, một attempt. |
@@ -1540,7 +1557,7 @@ Request đang xử lý giữ record `IN_PROGRESS`; request trùng trả 409 `IDE
 | Võ Thu Hà | `10000000-0000-4000-8000-000000000004` | 10.777000,106.701000; OFFLINE; MOTORBIKE | 24 m | Không |
 | Nguyễn Gia Huy | `10000000-0000-4000-8000-000000000005` | 10.778000,106.702000; ON_TRIP; CAR_4_SEAT | 179 m | Không |
 
-Customer `20000000-0000-4000-8000-000000000001`, phone `+84901234567`, có năm RideRequest seed: SEARCHING, ASSIGNED, NO_DRIVER_FOUND, CANCELLED và Trip COMPLETED. Seed bằng migration idempotent `infra/seed/seed-pilot`; password đều là hash của `CabPilot2026`, không commit hash/secret sản xuất.
+Customer `20000000-0000-4000-8000-000000000001`, phone `+84901234567`, có năm RideRequest seed: SEARCHING, ASSIGNED, NO_DRIVER_FOUND, CANCELLED và Trip COMPLETED. Seed bằng migration idempotent `infra/seed/seed-pilot`; script seed tính Argon2id lúc chạy từ password demo `CabPilot2026`, không commit sẵn chuỗi hash hoặc secret sản xuất.
 
 ### V.2. Chuỗi Postman chính
 
@@ -1614,10 +1631,12 @@ Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `dr
 4. API-X07: danh sách RideRequest của Customer, page/size theo BC-12.
 5. API-X08/X09: OTP đăng ký Driver sống 5 phút, tối đa 5 lần thử, lưu hash; API-02 nhận `otpVerificationId`.
 6. API-X10–X12: list/detail/decision DriverApplication; actor chuẩn là OPERATOR dù phiếu gọi Admin.
-7. JWT dùng RS256, access 15 phút, refresh opaque 30 ngày; SRS chưa chốt thuật toán và TTL cụ thể.
+7. JWT dùng RS256, access 15 phút, refresh opaque 30 ngày; khi khóa User, refresh bị thu hồi nhưng access đã phát có thể sống tối đa 15 phút. SRS chưa chốt thuật toán, TTL hay yêu cầu thu hồi tức thời; pilot chấp nhận đánh đổi này.
 8. ENT-23, ENT-24 là pattern cục bộ nhiều service nhưng cần một chủ schema để ma trận không trùng; lần lượt BC-01 và BC-05 quản trị contract. ENT-27 là contract BC-01, còn Gateway giữ bộ đếm trong bộ nhớ và không tạo bảng vật lý.
 
 ### VIII.2. API bổ sung cần cập nhật SRS
+
+Khi chấp nhận một API-X làm public contract, phải cập nhật đồng thời SRS §12.1 và `api_document/_manifest.yaml`; sau đó mới tái sinh/validate OpenAPI để tránh hai nguồn lệch nhau.
 
 | Mã | Method/path | Owner | Lý do |
 | --- | --- | --- | --- |
@@ -1640,4 +1659,4 @@ Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `dr
 - Phiếu dùng Payment COMPLETED và Trip CANCELED; SRS dùng Payment SUCCEEDED và Trip CANCELLED. Không tạo enum alias trong persistence.
 - Phiếu yêu cầu endpoint 1 km, trong khi matching SRS dùng 5 km. API-X06 là query kiểm thử/vận hành 1 km; thuật toán điều phối vẫn 5 km.
 - Phiếu minh họa password “mã hóa”; thiết kế dùng hash Argon2id cho password vì không cần giải mã, đúng DEC-29; chỉ field cần đọc lại mới dùng AES-256-GCM.
-- SRS chưa có OTP, endpoint đọc Customer/Driver theo ID, booking list, driver application list/detail/decision và health API; cần bổ sung 12 API-X vào §12.1 nếu giảng viên coi chúng là public contract.
+- SRS chưa có OTP, endpoint đọc Customer/Driver theo ID, booking list, driver application list/detail/decision và health API; cần bổ sung 12 API-X đồng thời vào SRS §12.1 và `api_document/_manifest.yaml` nếu giảng viên coi chúng là public contract.

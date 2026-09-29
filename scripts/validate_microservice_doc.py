@@ -114,7 +114,7 @@ def main() -> int:
     compose=section(doc,"```yaml\nservices:","```\n\nKhởi động")
     if compose.count("ports:")!=1: structural.append(f"compose ports declarations={compose.count('ports:')}, expected 1")
     containers=re.findall(r"^\| `([^`]+)` \|",table_block(doc,"| Container | Image/build |"),re.M)
-    if len(containers)!=13: structural.append(f"container rows={len(containers)}, expected 13")
+    if len(containers)!=8: structural.append(f"container rows={len(containers)}, expected 8")
     ok &= report("infrastructure acceptance markers",structural)
 
     placeholders=[]

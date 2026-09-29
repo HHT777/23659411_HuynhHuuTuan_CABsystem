@@ -4,7 +4,7 @@
 
 Tài liệu chuyển baseline CAB System thành kiến trúc triển khai microservice cho đồ án 7 tuần. Nguồn chuẩn là SRS §3, §7–§12; `api_document/_manifest.yaml`; và 30 tiêu chí trong `phieucham.md`. Khi phiếu chấm dùng thuật ngữ khác SRS, tài liệu giữ tên SRS trong code/data và chỉ ghi alias ở Phần VII.
 
-Quy tắc chốt: một Bounded Context (BC) bằng một microservice và một database riêng; API Gateway và RabbitMQ là hạ tầng, không phải BC; Redis chỉ lưu dữ liệu tạm/hot, không là nguồn sự thật. Mỗi mã ENT, FR, UC, DEC và API có một chủ sở hữu duy nhất trong ma trận Phần III.
+Quy tắc chốt: một Bounded Context (BC) bằng một microservice và một database riêng; API Gateway và RabbitMQ là hạ tầng, không phải BC. Toàn hệ thống chỉ dùng PostgreSQL cho dữ liệu; mỗi BC có database và user riêng trên cùng một server PostgreSQL. Mỗi mã ENT, FR, UC, DEC và API có một chủ sở hữu duy nhất trong ma trận Phần III.
 
 Các endpoint không có trong SRS §12.1 được đánh mã `API-Xnn` và gắn `⚠ Giả định (bổ sung theo phiếu chấm)`. Chúng không làm thay đổi 30 API baseline cho đến khi SRS được cập nhật.
 
@@ -52,6 +52,25 @@ Identity & Driver cung cấp Open Host Service cho xác thực và điều kiệ
 - Thay đổi nghiệp vụ phát event bằng transactional outbox; consumer dedupe theo `eventId`, xử lý at-least-once và không ghi chéo database.
 - Mọi message có `eventId`, `eventType`, `aggregateId`, `version`, `occurredAt`, `correlationId`, `payload`.
 - Nhất quán mạnh chỉ nằm trong một service. Notification/reporting nhất quán cuối cùng; API của owner là nguồn xác nhận trạng thái.
+
+### I.4. Quyết định CSDL chung
+
+Chọn duy nhất **PostgreSQL 16**. Trong 28 entity của SRS có nhiều quan hệ và invariant chặt: User–Profile–Vehicle–Availability, RideRequest–RideOffer–Trip–Rating, Fare–Payment–PaymentAttempt và Incident–Audit. DEC-04/28/34 yêu cầu cạnh tranh ACCEPT, một Payment/Trip, version và idempotency; các ràng buộc này cần transaction ACID, `UNIQUE`, `CHECK`, khóa hàng và optimistic locking. PostgreSQL đáp ứng trực tiếp mà không thêm cơ chế đồng bộ giữa nhiều engine.
+
+Phương án này phù hợp đồ án sinh viên 7 tuần: một công nghệ miễn phí, một image Docker, SQL quen thuộc, migration/seed/test/backup thống nhất và dễ chứng minh parameter binding, quyền user database, encryption at rest. Không chọn MongoDB vì schema hiện đã rõ và phần linh hoạt có thể lưu bằng `jsonb`; không chọn Redis vì dữ liệu TTL/timer của pilot có thể lưu bền vững hoặc giữ trong bộ nhớ tiến trình. Không trộn nhiều loại vì chi phí học, vận hành, backup và xử lý lỗi lớn hơn lợi ích ở tải pilot.
+
+| Nhu cầu đặc thù | Cách xử lý bằng PostgreSQL/ứng dụng | Đánh đổi pilot |
+| --- | --- | --- |
+| Idempotency 24 giờ, DEC-34 | Mỗi service có `idempotency_records`, `UNIQUE(subject_id,key)`, payload hash, state, response, expiresAt; job dọn định kỳ. | Insert thắng được chạy; insert thua trả response cũ hoặc 409 khi IN_PROGRESS/khác payload. |
+| Rate limit, DEC-30 | Gateway một instance giữ cửa sổ IP/user trong bộ nhớ. | Mất bộ đếm khi Gateway restart; chấp nhận ở pilot, không dùng cho triển khai nhiều replica. |
+| Offer 20 giây/hard stop 180 giây | `ride_offers.expires_at`, `ride_requests.search_started_at`; scheduler mỗi giây dùng `FOR UPDATE SKIP LOCKED`. | Quét định kỳ tạo sai số tối đa khoảng một giây nhưng trạng thái phục hồi sau restart. |
+| Vị trí nóng/GEO | `driver_current_locations` upsert; lọc bounding box rồi Haversine trong SQL; index `(lat,lng)`. | Không tối ưu như spatial engine ở quy mô lớn nhưng đủ tối đa 100 Trip đồng thời. |
+| OTP tài xế | `otp_challenges` chứa hash, attempts, expiresAt, verifiedAt; job dọn. | `⚠ Giả định`: SRS chưa chốt OTP. |
+| Khóa đăng nhập sai | Dùng `login_attempts` ENT-26 và query cửa sổ 15 phút. | Thêm query DB cho mỗi login. |
+| Callback trùng/khóa Payment | `provider_events.provider_event_id UNIQUE`; khóa hàng Payment bằng `SELECT FOR UPDATE`. | Transaction giữ khóa ngắn trong callback. |
+| SSE và Last-Event-ID | Connection registry trong bộ nhớ; Last-Event-ID là cursor `(createdAt,id)` đọc từ `notifications`. | Kết nối mất khi restart và client reconnect theo DEC-10/37. |
+
+Ngoài tải pilot 100 Trip đồng thời hoặc khi Gateway/service cần nhiều replica, có thể đánh giá cache/GEO/rate-limit phân tán hay engine chuyên dụng; đây là ngoài phạm vi đồ án. Triển khai dùng một server `postgres:16`, năm database `cab_identity_db`, `cab_ride_db`, `cab_billing_db`, `cab_notification_db`, `cab_operations_db`; mỗi database có user riêng, không FK/join/transaction chéo database.
 
 ## Phần II-A. Bước 0 — Kiến trúc hệ thống và hạ tầng
 
@@ -104,12 +123,11 @@ volumes/
 | --- | --- | --- |
 | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `/run/secrets/jwt_private.pem`, `/run/secrets/jwt_public.pem` | Identity ký; Gateway/service kiểm chữ ký |
 | `FIELD_ENCRYPTION_KEY`, `FIELD_KEY_VERSION` | `base64-demo-not-a-real-key`, `v1` | Identity & Driver |
-| `IDENTITY_DB_URL` | `postgresql://cab_identity:demo@identity-db:5432/cab_identity_db` | Identity & Driver |
-| `RIDE_DB_URL` | `postgresql://cab_ride:demo@ride-db:5432/cab_ride_db` | Ride |
-| `BILLING_DB_URL` | `postgresql://cab_billing:demo@billing-db:5432/cab_billing_db` | Billing |
-| `NOTIFICATION_DB_URL` | `mongodb://cab_notification:demo@notification-db:27017/cab_notification_db` | Notification |
-| `OPERATIONS_DB_URL` | `postgresql://cab_operations:demo@operations-db:5432/cab_operations_db` | Operations & Reporting |
-| `REDIS_URL` | `redis://redis:6379/0` | Gateway và service theo namespace |
+| `IDENTITY_DB_URL` | `postgresql://cab_identity:demo@postgres:5432/cab_identity_db` | Identity & Driver |
+| `RIDE_DB_URL` | `postgresql://cab_ride:demo@postgres:5432/cab_ride_db` | Ride |
+| `BILLING_DB_URL` | `postgresql://cab_billing:demo@postgres:5432/cab_billing_db` | Billing |
+| `NOTIFICATION_DB_URL` | `postgresql://cab_notification:demo@postgres:5432/cab_notification_db` | Notification |
+| `OPERATIONS_DB_URL` | `postgresql://cab_operations:demo@postgres:5432/cab_operations_db` | Operations & Reporting |
 | `RABBITMQ_URL` | `amqp://cab:demo@rabbitmq:5672/cab` | Mọi service |
 | `PAYMENT_CALLBACK_SECRET` | `demo-rotate-before-use` | Billing mock adapter |
 | `INTERNAL_SERVICE_TOKEN` | `demo-internal-token` | REST nội bộ trong pilot |
@@ -123,7 +141,7 @@ CI phải kiểm tra `.env` không được Git track, `.env.example` có mặt,
 | Routing | Route `/api/v1` theo bảng dưới; không chứa business logic. |
 | JWT | Kiểm chữ ký bất đối xứng, `exp`, `iss`, `aud`; gắn `sub`, `role` đã xác thực vào header nội bộ có ký. |
 | Phân quyền thô | Chặn role không thuộc allow-list; service vẫn kiểm ownership và rule. |
-| Rate limit | Redis sliding/fixed window theo DEC-30; trả 429 và `Retry-After`. |
+| Rate limit | Gateway một instance đếm cửa sổ IP/user trong bộ nhớ theo DEC-30; trả 429 và `Retry-After`. |
 | Correlation | Nhận hoặc sinh UUID `X-Correlation-Id`, truyền qua REST/message/log. |
 | Biên HTTP | Body tối đa 1 MiB, JSON UTF-8, CORS allow-list ba web app, TLS ≥1.2. |
 | Health facade | Thực thi `/health`, `/ready`, gom `/health/services` song song. |
@@ -182,62 +200,217 @@ sequenceDiagram
 
 | Container | Image/build | Vai trò | Port nội bộ | Publish host | Phụ thuộc/health | Volume |
 | --- | --- | --- | --- | --- | --- | --- |
-| `api-gateway` | `./gateway` | entry point | 8080 | `8080:8080` | Redis + 5 service ready | không |
-| `identity-driver-service` | build service | BC-01 | 8081 | — | identity-db, Redis, RabbitMQ | không |
-| `ride-service` | build service | BC-02 | 8082 | — | ride-db, Redis, RabbitMQ | không |
-| `billing-service` | build service | BC-03 | 8083 | — | billing-db, Redis, RabbitMQ | không |
-| `notification-service` | build service | BC-04 | 8084 | — | notification-db, Redis, RabbitMQ | không |
-| `operations-reporting-service` | build service | BC-05 | 8085 | — | operations-db, RabbitMQ | không |
-| `identity-db` | `postgres:16` | `cab_identity_db` | 5432 | — | `pg_isready` | `identity-data` |
-| `ride-db` | `postgres:16` | `cab_ride_db` | 5432 | — | `pg_isready` | `ride-data` |
-| `billing-db` | `postgres:16` | `cab_billing_db` | 5432 | — | `pg_isready` | `billing-data` |
-| `notification-db` | `mongo:7` | `cab_notification_db` | 27017 | — | `mongosh --eval ping` | `notification-data` |
-| `operations-db` | `postgres:16` | `cab_operations_db` | 5432 | — | `pg_isready` | `operations-data` |
-| `redis` | `redis:7-alpine` | rate limit, GEO, TTL | 6379 | — | `redis-cli ping` | `redis-data` |
+| `api-gateway` | `./gateway` | entry point | 8080 | `8080:8080` | 5 service ready | không |
+| `identity-driver-service` | build service | BC-01 | 8081 | — | PostgreSQL, RabbitMQ | không |
+| `ride-service` | build service | BC-02 | 8082 | — | PostgreSQL, RabbitMQ | không |
+| `billing-service` | build service | BC-03 | 8083 | — | PostgreSQL, RabbitMQ | không |
+| `notification-service` | build service | BC-04 | 8084 | — | PostgreSQL, RabbitMQ | không |
+| `operations-reporting-service` | build service | BC-05 | 8085 | — | PostgreSQL, RabbitMQ | không |
+| `postgres` | `postgres:16` | 5 database, 5 user riêng | 5432 | — | `pg_isready` | `postgres-data`, init script read-only |
 | `rabbitmq` | `rabbitmq:3-management` | broker + management nội bộ | 5672/15672 | — | `rabbitmq-diagnostics ping` | `rabbitmq-data` |
 
-Tổng: 13 container = 1 Gateway + 5 service + 5 database + Redis + RabbitMQ.
+Tổng: **8 container** = 1 Gateway + 5 service + 1 PostgreSQL + 1 RabbitMQ.
 
 ```yaml
 services:
   api-gateway:
-    build: ./gateway
-    ports: ["8080:8080"]
-    networks: [cab-internal]
+    build:
+      context: ./gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - cab-internal
     depends_on:
-      redis: { condition: service_healthy }
-      identity-driver-service: { condition: service_healthy }
+      identity-driver-service:
+        condition: service_healthy
+      ride-service:
+        condition: service_healthy
+      billing-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      operations-reporting-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   identity-driver-service:
-    build: ./services/identity-driver-service
-    expose: ["8081"]
-    networks: [cab-internal]
+    build:
+      context: ./services/identity-driver-service
+    environment:
+      IDENTITY_DB_URL: postgresql://cab_identity:${IDENTITY_DB_PASSWORD}@postgres:5432/cab_identity_db
+      RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+    expose:
+      - "8081"
+    networks:
+      - cab-internal
     depends_on:
-      identity-db: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   ride-service:
-    build: ./services/ride-service
-    expose: ["8082"]
-    networks: [cab-internal]
+    build:
+      context: ./services/ride-service
+    environment:
+      RIDE_DB_URL: postgresql://cab_ride:${RIDE_DB_PASSWORD}@postgres:5432/cab_ride_db
+      RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+    expose:
+      - "8082"
+    networks:
+      - cab-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   billing-service:
-    build: ./services/billing-service
-    expose: ["8083"]
-    networks: [cab-internal]
+    build:
+      context: ./services/billing-service
+    environment:
+      BILLING_DB_URL: postgresql://cab_billing:${BILLING_DB_PASSWORD}@postgres:5432/cab_billing_db
+      RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+    expose:
+      - "8083"
+    networks:
+      - cab-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   notification-service:
-    build: ./services/notification-service
-    expose: ["8084"]
-    networks: [cab-internal]
+    build:
+      context: ./services/notification-service
+    environment:
+      NOTIFICATION_DB_URL: postgresql://cab_notification:${NOTIFICATION_DB_PASSWORD}@postgres:5432/cab_notification_db
+      RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+    expose:
+      - "8084"
+    networks:
+      - cab-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   operations-reporting-service:
-    build: ./services/operations-reporting-service
-    expose: ["8085"]
-    networks: [cab-internal]
-  identity-db: { image: "postgres:16", expose: ["5432"], networks: [cab-internal] }
-  ride-db: { image: "postgres:16", expose: ["5432"], networks: [cab-internal] }
-  billing-db: { image: "postgres:16", expose: ["5432"], networks: [cab-internal] }
-  notification-db: { image: "mongo:7", expose: ["27017"], networks: [cab-internal] }
-  operations-db: { image: "postgres:16", expose: ["5432"], networks: [cab-internal] }
-  redis: { image: "redis:7-alpine", expose: ["6379"], networks: [cab-internal] }
-  rabbitmq: { image: "rabbitmq:3-management", expose: ["5672", "15672"], networks: [cab-internal] }
-networks: { cab-internal: { driver: bridge } }
+    build:
+      context: ./services/operations-reporting-service
+    environment:
+      OPERATIONS_DB_URL: postgresql://cab_operations:${OPERATIONS_DB_PASSWORD}@postgres:5432/cab_operations_db
+      RABBITMQ_URL: amqp://cab:${RABBITMQ_PASSWORD}@rabbitmq:5672/cab
+    expose:
+      - "8085"
+    networks:
+      - cab-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD}
+      RIDE_DB_PASSWORD: ${RIDE_DB_PASSWORD}
+      BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      OPERATIONS_DB_PASSWORD: ${OPERATIONS_DB_PASSWORD}
+    expose:
+      - "5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init/01-create-databases.sql:/docker-entrypoint-initdb.d/01-create-databases.sql:ro
+    networks:
+      - cab-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: cab
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: cab
+    expose:
+      - "5672"
+      - "15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - cab-internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+networks:
+  cab-internal:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+```
+
+Nội dung `infra/postgres/init/01-create-databases.sql`; `\getenv` lấy mật khẩu từ biến môi trường, không hard-code:
+
+```sql
+\getenv identity_password IDENTITY_DB_PASSWORD
+\getenv ride_password RIDE_DB_PASSWORD
+\getenv billing_password BILLING_DB_PASSWORD
+\getenv notification_password NOTIFICATION_DB_PASSWORD
+\getenv operations_password OPERATIONS_DB_PASSWORD
+CREATE ROLE cab_identity LOGIN PASSWORD :'identity_password';
+CREATE ROLE cab_ride LOGIN PASSWORD :'ride_password';
+CREATE ROLE cab_billing LOGIN PASSWORD :'billing_password';
+CREATE ROLE cab_notification LOGIN PASSWORD :'notification_password';
+CREATE ROLE cab_operations LOGIN PASSWORD :'operations_password';
+CREATE DATABASE cab_identity_db OWNER cab_identity;
+CREATE DATABASE cab_ride_db OWNER cab_ride;
+CREATE DATABASE cab_billing_db OWNER cab_billing;
+CREATE DATABASE cab_notification_db OWNER cab_notification;
+CREATE DATABASE cab_operations_db OWNER cab_operations;
 ```
 
 Khởi động và kiểm tra: `docker compose up -d`, `docker compose ps`, sau đó chạy collection `postman/CAB-smoke.postman_collection.json` qua Gateway.
@@ -247,7 +420,7 @@ Khởi động và kiểm tra: `docker compose up -d`, `docker compose ps`, sau 
 | Mã | Endpoint | Ý nghĩa |
 | --- | --- | --- |
 | API-X01 | `GET /health` | Liveness Gateway; không gọi phụ thuộc; 200 `{"status":"healthy"}`. |
-| API-X02 | `GET /ready` | Gateway kết nối Redis/RabbitMQ và route bắt buộc; 200 ready hoặc 503 not_ready. |
+| API-X02 | `GET /ready` | Gateway đã nạp cấu hình và kết nối các route bắt buộc; 200 ready hoặc 503 not_ready. |
 | API-X03 | `GET /health/services` | Gateway gọi song song `/health` và `/ready` nội bộ của 5 service, timeout 300 ms/service, tổng timeout 500 ms. |
 
 `⚠ Giả định (bổ sung theo phiếu chấm)`: API-X01–X03 được gán trách nhiệm quản trị contract cho BC-05, nhưng thực thi tại Gateway vì Gateway không phải BC.
@@ -346,6 +519,7 @@ API bổ sung theo phiếu chấm:
 | RefreshToken | ENT-25 | entity | Hash refresh token và thu hồi. |
 | LoginAttempt | ENT-26 | entity | Cửa sổ đăng nhập sai. |
 | RateLimitCounter | ENT-27 | value record hạ tầng | Contract đếm rate tại Gateway. |
+| OtpChallenge | `⚠ Giả định`, ngoài danh mục entity chuẩn | entity | Challenge OTP đăng ký tài xế, chỉ lưu hash và hạn dùng. |
 
 | Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/độ nhạy cảm |
 | --- | --- | --- | --- | --- |
@@ -366,6 +540,7 @@ API bổ sung theo phiếu chấm:
 | RefreshToken.id / userId / tokenHash / expiresAt / revokedAt | id / id / text(255) / thời điểm / thời điểm | Y/Y/Y/Y/N | id,tokenHash | tokenHash `SENSITIVE-HASH`. |
 | LoginAttempt.id / phoneHash / ip / success / attemptedAt | id / text(64) / text(45) / boolean / thời điểm | Y | id | phoneHash `SENSITIVE-HASH`; IP `SENSITIVE-ENCRYPT`. |
 | RateLimitCounter.scopeKey / windowStart / count / expiresAt | text(160) / thời điểm / số nguyên / thời điểm | Y | scopeKey | dữ liệu tạm theo DEC-30. |
+| OtpChallenge.id / phoneHash / otpHash / attempts / expiresAt / verifiedAt | id / text(64) / text(255) / số nguyên / thời điểm / thời điểm | Y/Y/Y/Y/Y/N | id | OTP sống 5 phút, tối đa 5 lần thử; giả định phiếu #21. |
 
 Quan hệ: User 1–1 CustomerProfile hoặc 1–1 DriverProfile; DriverProfile 1–1 DriverApplication, 1–N DriverDocument, 1–N Vehicle nhưng đúng một Vehicle ACTIVE, 1–1 Availability và 1–N DriverLocation. Tham chiếu `tripId` chỉ là ID BC-02, không có ràng buộc liên context.
 
@@ -389,7 +564,7 @@ erDiagram
 
 ##### 5.1. Chọn loại CSDL
 
-Engine chính: **PostgreSQL 16**, database `cab_identity_db`; Redis bổ trợ cho GEO vị trí nóng, OTP TTL, login/rate counter và idempotency. Quan hệ 1–1, phone/plate unique, duyệt hồ sơ/version cần ACID. Không chọn MongoDB vì invariant và unique nhiều hơn lợi ích schema linh hoạt; không chọn Redis làm nguồn thật vì hồ sơ/xe phải bền vững, backup được. Service không truy cập database khác.
+Database `cab_identity_db`, user `cab_identity`. Quan hệ User–Profile–Vehicle–Availability, phone/plate duy nhất và quyết định duyệt theo version cần transaction/constraint. Vị trí hiện tại dùng upsert và Haversine SQL; OTP/idempotency dùng hàng có `expires_at`; đăng nhập sai truy vấn ENT-26. Service không truy cập database khác.
 
 ##### 5.2. Mô hình vật lý
 
@@ -421,28 +596,45 @@ CREATE TABLE driver_locations (
   trip_id uuid,
   PRIMARY KEY (driver_id, received_at)
 );
+CREATE TABLE driver_current_locations (
+  driver_id uuid PRIMARY KEY REFERENCES driver_profiles(user_id),
+  lat numeric(9,6) NOT NULL CHECK (lat BETWEEN -90 AND 90),
+  lng numeric(9,6) NOT NULL CHECK (lng BETWEEN -180 AND 180),
+  received_at timestamptz NOT NULL,
+  trip_id uuid
+);
+CREATE INDEX ix_driver_current_locations_lat_lng ON driver_current_locations(lat, lng);
+CREATE TABLE otp_challenges (
+  id uuid PRIMARY KEY,
+  phone_hash char(64) NOT NULL,
+  otp_hash varchar(255) NOT NULL,
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+  expires_at timestamptz NOT NULL,
+  verified_at timestamptz
+);
+CREATE TABLE idempotency_records (
+  subject_id uuid NOT NULL,
+  key uuid NOT NULL,
+  payload_hash char(64) NOT NULL,
+  state varchar(12) NOT NULL CHECK (state IN ('IN_PROGRESS','COMPLETED')),
+  response jsonb,
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY (subject_id, key)
+);
 ```
 
-Redis:
-
-| Key pattern | Kiểu | TTL | Mục đích/nguồn |
-| --- | --- | --- | --- |
-| `geo:drivers:available` | GEO | cập nhật liên tục; member xóa khi OFFLINE | Truy vấn vị trí nóng, DEC-03/18. |
-| `otp:driver:{challengeId}` | HASH | 5 phút | hash OTP, số lần thử; giả định phiếu #21. |
-| `idem:{subjectId}:{key}` | HASH | 24 giờ | payload hash + trạng thái + response, DEC-34. |
-| `login:{phoneHash}:{window}` | COUNTER | 15 phút | khóa lần sai thứ 5, DEC-29. |
-| `ratelimit:{scope}:{window}` | COUNTER | 60 giây | DEC-30. |
-
-GEO phiếu #13: `GEOSEARCH geo:drivers:available FROMLONLAT 106.700806 10.776889 BYRADIUS 1 km ASC COUNT 21`; lọc lại User/Application/Vehicle/Availability hợp lệ, trả tối đa `limit≤100`. Cursor là `(distanceMeters,driverId)` cuối, ổn định hơn offset khi vị trí đổi. PostgreSQL vẫn là nguồn thật; Redis rebuild từ location mới nhất.
+Truy vấn phiếu #13 lọc bounding box quanh `10.776889,106.700806`, sau đó tính Haversine trong SQL và giữ `distance_meters<=1000`, sắp `(distanceMeters,driverId)`, lấy `limit+1` với `limit≤100`. Cursor là cặp cuối, ổn định hơn offset. `driver_current_locations` phục vụ truy vấn mới nhất; `driver_locations` giữ lịch sử ENT-07 để cộng quãng đường. Job xóa OTP/idempotency hết hạn; LoginAttempt được query trực tiếp trong cửa sổ 15 phút.
 
 Bảo vệ: password dùng Argon2id có salt (`123400` → `$argon2id$v=19$m=65536,t=3,p=1$ZGVtby1zYWx0$ZGVtby1oYXNo`), không mã hóa thuận nghịch. Phone/fullName/plate/fileKey dùng AES-256-GCM, lưu ciphertext/nonce/keyVersion; khóa ngoài DB, xoay theo version; phone/plate tìm bằng HMAC blind index. Tất cả query dùng parameter binding, DB user chỉ có quyền database này.
 
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
 | User, CustomerProfile, DriverProfile, Vehicle | `users`, `customer_profiles`, `driver_profiles`, `vehicles` |
-| DriverLocation, Availability, VehicleType | `driver_locations` + Redis GEO, `availabilities`, `vehicle_types` |
+| DriverLocation, Availability, VehicleType | `driver_locations` + `driver_current_locations`, `availabilities`, `vehicle_types` |
 | DriverApplication, DriverDocument | `driver_applications`, `driver_documents` |
-| IdempotencyRecord, RefreshToken, LoginAttempt, RateLimitCounter | `idempotency_records` + Redis, `refresh_tokens`, `login_attempts`, Redis counter |
+| IdempotencyRecord, RefreshToken, LoginAttempt | `idempotency_records`, `refresh_tokens`, `login_attempts` |
+| RateLimitCounter | Không có bảng vật lý; Gateway một instance giữ bộ đếm trong bộ nhớ theo contract ENT-27. |
+| OtpChallenge (`⚠ Giả định`) | `otp_challenges`; entity bổ sung theo phiếu #21, không thuộc danh mục entity chuẩn. |
 
 #### Bước 6. Ubiquitous Language
 
@@ -541,7 +733,7 @@ erDiagram
 
 ##### 5.1. Chọn loại CSDL
 
-Engine chính **PostgreSQL 16**, `cab_ride_db`; Redis bổ trợ timer offer, lock ngắn, candidate exclusion và idempotency. ACCEPT/version/state transition cần transaction và unique constraint. MongoDB không thuận lợi cho cạnh tranh nhiều aggregate; Redis không đủ bền cho Trip/history. Ride là service duy nhất truy cập database này.
+Database `cab_ride_db`, user `cab_ride`. ACCEPT cạnh tranh, version/state transition và một Trip/driver mở cần transaction, khóa hàng và partial unique index. Offer timer/hard stop lấy từ `expires_at`/`search_started_at`; idempotency lưu trong bảng cục bộ. Ride là service duy nhất truy cập database này.
 
 ##### 5.2. Mô hình vật lý
 
@@ -558,6 +750,7 @@ CREATE TABLE ride_requests (
   vehicle_type_id uuid NOT NULL,
   quoted_fare_vnd bigint,
   price_version_id uuid,
+  search_started_at timestamptz NOT NULL,
   status varchar(24) NOT NULL CHECK (status IN ('SEARCHING','ASSIGNED','NO_DRIVER_FOUND','CANCELLED')),
   version integer NOT NULL CHECK (version > 0)
 );
@@ -579,21 +772,25 @@ CREATE TABLE trips (
   distance_source varchar(32),
   version integer NOT NULL CHECK (version > 0)
 );
+CREATE TABLE idempotency_records (
+  subject_id uuid NOT NULL,
+  key uuid NOT NULL,
+  payload_hash char(64) NOT NULL,
+  state varchar(12) NOT NULL CHECK (state IN ('IN_PROGRESS','COMPLETED')),
+  response jsonb,
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY (subject_id, key)
+);
 ```
 
-| Redis key | Kiểu | TTL | Mục đích |
-| --- | --- | --- | --- |
-| `offer:{offerId}` | HASH/ZSET timer | 20 giây | Hết hạn offer theo DEC-03/16. |
-| `dispatch:{rideRequestId}` | HASH | 180 giây | elapsed, driver đã mời/loại. |
-| `driver:pending-offer:{driverId}` | STRING | tối đa 20 giây | Chặn offer PENDING thứ hai. |
-| `idem:{subjectId}:{key}` | HASH | 24 giờ | Replay API thay đổi trạng thái. |
+Scheduler mỗi giây chọn offer hết hạn bằng `WHERE status='PENDING' AND expires_at<=now() FOR UPDATE SKIP LOCKED`; elapsed điều phối lấy từ `ride_requests.search_started_at`, nên restart vẫn tiếp tục đúng mốc 160/180 giây. Partial unique offer PENDING chặn lời mời thứ hai; bảng `idempotency_records` giữ response 24 giờ và được job dọn định kỳ.
 
 Mọi query parameterized; DB role chỉ có quyền `cab_ride_db`. Dữ liệu ID không chứa secret; comment rating là user content, lưu nguyên văn và escape khi xuất HTML.
 
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
 | RideRequest | `ride_requests` |
-| RideOffer | `ride_offers` + Redis timer |
+| RideOffer | `ride_offers`; scheduler dựa trên `expires_at` |
 | Trip | `trips` |
 | Rating | `ratings` |
 | StatusHistory | `status_history` |
@@ -693,7 +890,7 @@ erDiagram
 
 ##### 5.1. Chọn loại CSDL
 
-Engine chính **PostgreSQL 16**, `cab_billing_db`; Redis giữ idempotency/callback lock ngắn. Tiền, unique 1–1, version và callback cạnh tranh cần ACID/audit. MongoDB không đem lại lợi ích cho schema ổn định; Redis không là ledger bền vững. Không service khác truy cập database này.
+Database `cab_billing_db`, user `cab_billing`. Fare/Payment 1–1 Trip, số tiền, version và callback cạnh tranh cần transaction/unique. Idempotency dùng bảng cục bộ; callback dedupe bằng `provider_events`, còn cập nhật Payment serialize bằng khóa hàng. Không service khác truy cập database này.
 
 ##### 5.2. Mô hình vật lý
 
@@ -725,13 +922,24 @@ CREATE TABLE payment_attempts (
   provider_ref varchar(100) UNIQUE,
   status varchar(12) NOT NULL
 );
+CREATE TABLE provider_events (
+  provider_event_id varchar(100) PRIMARY KEY,
+  payment_id uuid NOT NULL REFERENCES payments(id),
+  payload_hash char(64) NOT NULL,
+  received_at timestamptz NOT NULL
+);
+CREATE TABLE idempotency_records (
+  subject_id uuid NOT NULL,
+  key uuid NOT NULL,
+  payload_hash char(64) NOT NULL,
+  state varchar(12) NOT NULL CHECK (state IN ('IN_PROGRESS','COMPLETED')),
+  response jsonb,
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY (subject_id, key)
+);
 ```
 
-| Redis key | Kiểu | TTL | Mục đích |
-| --- | --- | --- | --- |
-| `idem:{subjectId}:{key}` | HASH | 24 giờ | Payment/review/cash idempotency. |
-| `provider:event:{providerEventId}` | STRING | 24 giờ, sau đó bản bền vững vẫn giữ | Fast dedupe callback. |
-| `payment:lock:{paymentId}` | STRING NX | 10 giây | Serialize callback/confirm cạnh tranh. |
+Callback insert `provider_events` trước; trùng PK trả kết quả đã có. Transaction khóa hàng Payment bằng `SELECT FOR UPDATE`, kiểm tra trạng thái rồi mới cập nhật PaymentAttempt/Payment và outbox. `idempotency_records` giữ thao tác review/cash/payment 24 giờ; job xóa bản hết hạn.
 
 Fare demo: MOTORBIKE 2.001 m → `10.000 + 1/1000×4.000 = 10.004`, làm tròn 11.000 VND; CAR_4_SEAT tương ứng 26.000 VND. Query dùng parameter binding; DB role riêng. CAB không lưu số thẻ/CVV/token provider. Callback secret ở secret store, không DB; log chỉ providerRef đã mask.
 
@@ -816,34 +1024,35 @@ erDiagram
 
 ##### 5.1. Chọn loại CSDL
 
-Engine chính **MongoDB 7**, database `cab_notification_db`; Redis giữ SSE connection/checkpoint ngắn hạn. Inbox đọc nhiều theo recipient, payload từng event có thể mở rộng và không có quan hệ giao dịch phức tạp, phù hợp document. PostgreSQL vẫn làm được nhưng migration payload event kém linh hoạt; Redis không được dùng làm nguồn inbox vì reconnect cần dữ liệu bền vững.
+Database `cab_notification_db`, user `cab_notification`. Dedupe `(recipientId,eventId)`, chuyển READ một chiều và phân trang ổn định cần unique/index; `resource` linh hoạt lưu `jsonb`. SSE connection registry giữ trong bộ nhớ tiến trình, còn reconnect dùng Last-Event-ID đọc lại bản ghi bền vững.
 
 ##### 5.2. Mô hình vật lý
 
-Collection `notifications` có unique compound index `{recipientId:1,eventId:1}`, inbox index `{recipientId:1,createdAt:-1,_id:-1}`. Cursor là `(createdAt,id)`, `size≤100`. Không TTL bản ghi inbox trong pilot vì retention production chưa chốt.
-
-```json
-{
-  "_id": "550e8400-e29b-41d4-a716-446655440000",
-  "recipientId": "550e8400-e29b-41d4-a716-446655440002",
-  "eventId": "550e8400-e29b-41d4-a716-446655440003",
-  "type": "RideOfferCreated",
-  "resource": {"rideOfferId":"550e8400-e29b-41d4-a716-446655440004","expiresAt":"2026-09-29T09:15:20+07:00"},
-  "createdAt": "2026-09-29T09:15:00+07:00",
-  "readAt": null
-}
+```sql
+CREATE TABLE notifications (
+  id uuid PRIMARY KEY,
+  recipient_id uuid NOT NULL,
+  event_id uuid NOT NULL,
+  type varchar(64) NOT NULL,
+  resource jsonb NOT NULL,
+  created_at timestamptz NOT NULL,
+  read_at timestamptz,
+  UNIQUE (recipient_id, event_id)
+);
+CREATE INDEX ix_notifications_inbox
+  ON notifications(recipient_id, created_at DESC, id DESC);
+INSERT INTO notifications(id,recipient_id,event_id,type,resource,created_at,read_at)
+VALUES ('550e8400-e29b-41d4-a716-446655440000','550e8400-e29b-41d4-a716-446655440002',
+        '550e8400-e29b-41d4-a716-446655440003','RideOfferCreated',
+        '{"rideOfferId":"550e8400-e29b-41d4-a716-446655440004","expiresAt":"2026-09-29T09:15:20+07:00"}',
+        '2026-09-29T09:15:00+07:00',NULL);
 ```
 
-| Redis key | Kiểu | TTL | Mục đích |
-| --- | --- | --- | --- |
-| `sse:connection:{userId}:{connectionId}` | HASH | 60 giây heartbeat | Connection registry. |
-| `sse:last:{userId}` | STRING | 24 giờ | Last delivered event hint; DB vẫn là nguồn. |
-
-Mongo query dùng driver binding, allow-list sort/filter; không dựng `$where` từ input. Nội dung event lưu nguyên văn JSON an toàn, response `application/json`/`text/event-stream`; web client escape text, CSP chặn inline script.
+Cursor `(createdAt,id)`, `size≤100`; không xóa inbox theo TTL vì retention production chưa chốt. Registry SSE nằm trong bộ nhớ notification-service. Last-Event-ID ánh xạ tới cursor và query các hàng mới hơn. Query dùng parameter binding/allow-list sort; nội dung resource trả JSON, web client escape text và CSP chặn inline script.
 
 | Entity logic | Ánh xạ vật lý |
 | --- | --- |
-| Notification | collection `notifications`; Redis chỉ connection/checkpoint |
+| Notification | bảng `notifications`; connection SSE chỉ là trạng thái bộ nhớ tiến trình |
 
 #### Bước 6. Ubiquitous Language
 
@@ -920,7 +1129,7 @@ erDiagram
 
 ##### 5.1. Chọn loại CSDL
 
-Engine chính **PostgreSQL 16**, `cab_operations_db`; không cần Redis cho nguồn nghiệp vụ, có thể dùng cache báo cáo ngắn hạn nhưng mặc định không dùng. Incident version/audit unique cần ACID; JSONB cho dimensions/metrics đủ linh hoạt. MongoDB thuận tiện projection nhưng làm yếu transaction Incident/audit; Redis không bền và không phù hợp backup hằng ngày.
+Database `cab_operations_db`, user `cab_operations`. Incident theo version, audit append-only và consumer dedupe cần transaction/unique; dimensions/metrics dùng `jsonb`, báo cáo theo kỳ dùng index ngày. Service không dùng cache ngoài tiến trình và không truy cập database khác.
 
 ##### 5.2. Mô hình vật lý
 
@@ -983,10 +1192,10 @@ Reason/beforeAfter có thể chứa dữ liệu cá nhân: validate/mask tại n
 | BC-01 Identity & Driver | `identity-driver-service` | `cab_identity_db` (PostgreSQL) | API-01–10; API-X04–06, X08–12 | UC-01.1, 01.2, 02, 03.1, 03.2, 04, 08, 16.2, 16.3, 16.5, 16.6 | 13 |
 | BC-02 Ride | `ride-service` | `cab_ride_db` (PostgreSQL) | API-11–17; API-X07 | UC-05.1, 05.2, 06.1–06.3, 07.1–07.2, 09.1–09.2, 10, 14, 15 | 5 |
 | BC-03 Billing | `billing-service` | `cab_billing_db` (PostgreSQL) | API-18–23 | UC-11, 11.2, 12.1–12.4, 16.4 | 4 |
-| BC-04 Notification | `notification-service` | `cab_notification_db` (MongoDB) | API-24–26 | UC-13.1–13.3 | 1 |
+| BC-04 Notification | `notification-service` | `cab_notification_db` (PostgreSQL) | API-24–26 | UC-13.1–13.3 | 1 |
 | BC-05 Operations & Reporting | `operations-reporting-service` | `cab_operations_db` (PostgreSQL) | API-27–30; API-X01–03 | UC-16.1, 16.7, 17.1–17.3, 18.1–18.2 | 5 |
 
-Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5. Redis và RabbitMQ không tính là database nghiệp vụ.
+Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5; năm database nằm trên một container PostgreSQL. RabbitMQ là broker, không phải database nghiệp vụ.
 
 ### III.2. Hợp đồng event
 
@@ -1006,7 +1215,7 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5. Redis 
 ### III.3. Ranh giới giao dịch và xử lý thất bại
 
 - Trong service: aggregate + StatusHistory/outbox/idempotency record commit cùng transaction. Giữa service: RabbitMQ at-least-once, eventual consistency, không distributed transaction.
-- Offer hết hạn: Redis timer chỉ kích hoạt; Ride khóa row/version, nếu vẫn PENDING thì EXPIRED, phát event và chọn vòng mới. ACCEPT đến 20.001 giây trả 410; đúng 20.000 giây chỉ thắng nếu commit trước expiry transition.
+- Offer hết hạn: scheduler mỗi giây khóa các hàng `ride_offers` hết hạn bằng `FOR UPDATE SKIP LOCKED`; nếu vẫn PENDING thì EXPIRED, phát event và chọn vòng mới. ACCEPT đến 20.001 giây trả 410; đúng 20.000 giây chỉ thắng nếu commit trước expiry transition.
 - Callback thanh toán trễ: providerEventId dedupe; UNKNOWN giữ chặn; callback SUCCEEDED đến sau timeout được áp dụng một lần. Payment đã SUCCEEDED không bị downgrade.
 - Driver hủy sau nhận: trước PICKED_UP Trip→CANCELLED, không tự matching lại; từ PICKED_UP dùng Incident, có thể TERMINATED_BY_INCIDENT và Fare review.
 - Notification/Billing down không rollback RideRequest; outbox tồn và publisher gửi lại sau phục hồi.
@@ -1053,7 +1262,7 @@ Số BC = số microservice nghiệp vụ = số database `cab_*_db` = 5. Redis 
 | BC-04 | API-24, API-25, API-26 |
 | BC-05 | API-27, API-28, API-29, API-30 |
 
-ENT-23/24 là mẫu kỹ thuật được triển khai cục bộ ở nhiều service, nhưng để đáp ứng quy tắc một chủ contract: BC-01 quản trị schema IdempotencyRecord, BC-05 quản trị schema OutboxEvent. ENT-27 được lưu tại Gateway Redis nhưng chính sách/rate contract do BC-01 quản trị; Gateway vẫn không trở thành BC và không có aggregate nghiệp vụ.
+ENT-23/24 là mẫu kỹ thuật được triển khai cục bộ ở nhiều service, nhưng để đáp ứng quy tắc một chủ contract: BC-01 quản trị schema IdempotencyRecord, BC-05 quản trị schema OutboxEvent. ENT-27 là contract do BC-01 quản trị; Gateway giữ bộ đếm trong bộ nhớ và không có bảng vật lý. Gateway vẫn không trở thành BC và không có aggregate nghiệp vụ.
 
 ## Phần IV. Bảo mật xuyên hệ thống
 
@@ -1066,11 +1275,11 @@ Identity phát access JWT ký `RS256`, hạn 15 phút; claim tối thiểu `sub`
 | Phiếu | Đe dọa | Lớp chặn/cơ chế | HTTP | Ví dụ Postman |
 | ---: | --- | --- | ---: | --- |
 | 24 | Đọc trực tiếp DB | Argon2id cho password; AES-256-GCM + nonce/keyVersion cho phone/name/plate; khóa ngoài DB; blind index HMAC. | 200 API nhưng DB chỉ thấy ciphertext/hash | Đăng ký password `CabPilot2026`, sau đó truy vấn DB qua test fixture xác nhận không có plaintext. |
-| 25 | SQL/NoSQL injection | JSON schema, parameter binding/ORM, allow-list sort/filter, least-privilege DB user; Mongo không nhận operator từ client. | 400/401 | POST `/api/v1/auth/login` body `{"phone":"' OR 1=1 --","password":"anything"}` → 400/401. |
+| 25 | SQL injection | JSON schema, parameter binding/ORM, allow-list sort/filter và user database tối thiểu; không nối chuỗi SQL. | 400/401 | POST `/api/v1/auth/login` body `{"phone":"' OR 1=1 --","password":"anything"}` → 400/401. |
 | 26 | Stored/reflected XSS | Lưu comment/reason như text; JSON encoder; UI escape; CSP `default-src 'self'`, `script-src 'self'`; `X-Content-Type-Options: nosniff`. | 201/200, script không chạy | POST rating comment `<script>alert('hack')</script>`; GET trả escaped/render như text. |
 | 27 | JWT tampering | RS256 signature, issuer/audience/expiry/tokenVersion; bỏ tin header role từ client. | 401 | Sửa `sub/role` trong `$customerToken`, GET `/api/v1/operations/trips/active` → 401. |
 | 28 | Sai role/ownership | Gateway allow-list + service policy mặc định deny; query luôn scope theo `sub`. | 403 | CUSTOMER PUT `/api/v1/drivers/me/availability` → 403, không dữ liệu. |
-| 29 | Flood/rate attack | Redis counter theo IP/user, DEC-30: login 10/phút/IP, RideRequest 5/phút/user, location 12/phút/driver, chung 100/phút/user; trả `Retry-After`. | 429 | Gửi lần RideRequest thứ 6 trong phút → 429; tải >1000/s bị chặn tại Gateway. |
+| 29 | Flood/rate attack | Gateway một instance đếm cửa sổ trong bộ nhớ theo IP/user. DEC-30: login 10/phút/IP, RideRequest 5/phút/user, location 12/phút/driver, chung 100/phút/user; trả `Retry-After`. | 429 | Gửi lần RideRequest thứ 6 trong phút → 429; restart Gateway làm mất cửa sổ hiện tại, là đánh đổi pilot. |
 | 30 | Replay/double charge | `Idempotency-Key` UUID, subject+key, payload SHA-256, state IN_PROGRESS/COMPLETED, TTL 24h; cùng payload trả response cũ, khác payload 409. Provider event dedupe. | status cũ/409 | Gửi API-21 hai lần với key `550e8400-e29b-41d4-a716-446655440099` → cùng paymentId, một attempt. |
 
 Request đang xử lý giữ record `IN_PROGRESS`; request trùng trả 409 `IDEMPOTENCY_IN_PROGRESS` và `Retry-After: 1`, không chạy song song. Khi hoàn tất lưu status/body cũ. Secret scan, dependency scan và log scan chạy CI; log bắt buộc correlationId nhưng không token/password/phone đầy đủ.
@@ -1121,7 +1330,7 @@ Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `dr
 | 2 | `.gitignore`/`.env` | Repo/CI | GET `/health`, body none; `git ls-files .env` rỗng, `.env.example` tồn tại | Không secret thật | 0.2 | Hạ tầng |
 | 3 | Gateway | API Gateway | GET `/health`, body none | routing/auth/rate/correlation hoạt động | 0.3 | Hạ tầng |
 | 4 | IPC | 5 BC/RabbitMQ | POST `/ride-requests` body pickup/destination cụ thể ở #15 | REST candidate + async offer event | 0.4 | Hạ tầng |
-| 5 | Compose/container | Docker | GET `/health`, body none; `docker compose ps` | Đủ 13 container, chỉ Gateway publish | 0.5 | Hạ tầng |
+| 5 | Compose/container | Docker | GET `/health`, body none; `docker compose ps` | Đủ 8 container, chỉ Gateway publish | 0.5 | Hạ tầng |
 | 6 | Health | Gateway/BC-05 | GET `/health`, GET `/ready`, GET `/health/services`, body none | 200 healthy/ready; 503 degraded khi service down | 0.6 | API bổ sung X01–03 |
 | 7 | Broker | RabbitMQ | POST `/ride-requests`; xem queue `ride.notification` | Event được ack hoặc DLQ đúng retry | 0.7 | Hạ tầng |
 | 8 | Mọi request qua Gateway | Gateway | GET `http://localhost:8080/health`; thử `localhost:8081/health` | Gateway 200, port service không kết nối | 0.3/0.5 | Hạ tầng |
@@ -1145,7 +1354,7 @@ Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `dr
 | 26 | XSS | BC-02/web | POST rating comment `<script>alert('hack')</script>` rồi GET Trip/Rating projection | Chuỗi là text, không execute; CSP/escape | IV.2 | Cơ chế bảo mật |
 | 27 | JWT tampering | Gateway/service | Sửa payload `$customerToken`, GET `/operations/trips/active` | 401 signature invalid | IV.1–2 | Cơ chế bảo mật |
 | 28 | Unauthorized | Gateway/BC-01 | CUSTOMER PUT `/drivers/me/availability` `{"status":"ONLINE","version":1}` | 403, không thay đổi dữ liệu | IV.3 | Cơ chế bảo mật |
-| 29 | Rate limit | Gateway/Redis | Lặp POST `/ride-requests` sáu lần/phút cùng Customer | Lần 6 trả 429 + Retry-After; hệ thống không sập | IV.2/DEC-30 | Cơ chế bảo mật |
+| 29 | Rate limit | Gateway memory | Lặp POST `/ride-requests` sáu lần/phút cùng Customer | Lần 6 trả 429 + Retry-After; hệ thống không sập | IV.2/DEC-30 | Cơ chế bảo mật |
 | 30 | Replay | Mọi write API/BC-03 | Lặp POST `/trips/{tripId}/payments` cùng Idempotency-Key/body; sau đó cùng key/body khác | Trả paymentId cũ; body khác 409; một attempt | IV.2/DEC-34 | Cơ chế bảo mật |
 
 ## Phần VII. Đối chiếu thuật ngữ phiếu chấm ↔ SRS
@@ -1173,7 +1382,7 @@ Biến environment: `baseUrl=http://localhost:8080/api/v1`, `customerToken`, `dr
 5. API-X08/X09: OTP đăng ký Driver sống 5 phút, tối đa 5 lần thử, lưu hash; API-02 nhận `otpVerificationId`.
 6. API-X10–X12: list/detail/decision DriverApplication; actor chuẩn là OPERATOR dù phiếu gọi Admin.
 7. JWT dùng RS256, access 15 phút, refresh opaque 30 ngày; SRS chưa chốt thuật toán và TTL cụ thể.
-8. ENT-23, ENT-24 là pattern cục bộ nhiều service nhưng cần một chủ schema để ma trận không trùng; lần lượt BC-01 và BC-05 quản trị contract. ENT-27 nằm ở Gateway Redis nhưng policy contract gán BC-01.
+8. ENT-23, ENT-24 là pattern cục bộ nhiều service nhưng cần một chủ schema để ma trận không trùng; lần lượt BC-01 và BC-05 quản trị contract. ENT-27 là contract BC-01, còn Gateway giữ bộ đếm trong bộ nhớ và không tạo bảng vật lý.
 
 ### VIII.2. API bổ sung cần cập nhật SRS
 

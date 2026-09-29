@@ -1,5 +1,0 @@
-bearerAuth:
-  type: http
-  scheme: bearer
-  bearerFormat: JWT
-  description: JWT access token có thời hạn 30 phút. Không truyền token qua URL.

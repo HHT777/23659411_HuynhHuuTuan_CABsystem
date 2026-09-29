@@ -154,6 +154,14 @@ def schemas():
       "Report":obj({"from":s("string",format="date-time"),"to":s("string",format="date-time"),"timezone":s("string",enum=["Asia/Ho_Chi_Minh"]),"tripCount":s("integer",minimum=0),"revenueVnd":s("integer",minimum=0),"completionRate":s("number",minimum=0,maximum=1,nullable=True),"cancellationRate":s("number",minimum=0,maximum=1,nullable=True),"findDriverRate":s("number",minimum=0,maximum=1,nullable=True),"acceptanceRate":s("number",minimum=0,maximum=1,nullable=True),"averageRating":s("number",minimum=1,maximum=5,nullable=True),"asOf":DT},["from","to","timezone","tripCount","revenueVnd","asOf"]),
       "Last-Event-ID":s("string"), "filters":obj({"status":s("string")}), "query":obj({"from":DT,"to":DT})
     })
+    # SRS fixes DTO names but does not provide a field-by-field DTO dictionary.
+    for name in ["RegisterRequest","UserResponse","DriverRegistrationRequest","LoginRequest","AuthTokens","RefreshRequest",
+                 "ProfilePatch","Profile","AvailabilityRequest","LocationRequest","Location","InternalUserCreate",
+                 "AccountAction","RideRequestCreate","Cancellation","OfferDecision","TripStatusUpdate","RatingCreate",
+                 "FareEstimateRequest","FareEstimate","FareReviewRequest","PaymentCreate","CashConfirmation",
+                 "ProviderCallback","NotificationPage","NotificationPatch","SSE","ActiveTripPage","IncidentCreate",
+                 "IncidentUpdate","Report","Last-Event-ID","filters","query"]:
+        d[name]["x-assumption"]=True
     return d
 
 ERROR_NAMES={400:"BadRequest",401:"Unauthorized",403:"Forbidden",404:"NotFound",409:"Conflict",410:"Gone",422:"UnprocessableEntity",423:"Locked",429:"TooManyRequests"}
@@ -171,9 +179,10 @@ def manifest():
 
 def example_for(name):
     ids={"id":"550e8400-e29b-41d4-a716-446655440000","vehicleTypeId":"550e8400-e29b-41d4-a716-446655440010"}
+    trip_id="550e8400-e29b-41d4-a716-446655440001"; user_id="550e8400-e29b-41d4-a716-446655440002"; price_id="550e8400-e29b-41d4-a716-446655440003"
     ex={
       "RegisterRequest":{"phone":"+84901234567","password":"CabPilot2026","fullName":"Nguyễn Minh An"},
-      "DriverRegistrationRequest":{"phone":"+84909876543","password":"Driver2026","fullName":"Trần Văn Bình","vehicleTypeId":ids["vehicleTypeId"],"plate":"59A1-12345","documents":[{"type":"GPLX","fileKey":"private/gplx-2026.pdf","maskedValue":"******1234"}]},
+      "DriverRegistrationRequest":{"phone":"+84909876543","password":"Driver2026","fullName":"Trần Văn Bình","vehicleTypeId":ids["vehicleTypeId"],"plate":"59A1-12345","documents":[{"type":"GPLX","fileKey":"private/gplx-2026.pdf","maskedValue":"******1234"},{"type":"CCCD","fileKey":"private/cccd-2026.pdf","maskedValue":"******5678"},{"type":"VEHICLE_REGISTRATION","fileKey":"private/vehicle-2026.pdf","maskedValue":"59A1-*****"}]},
       "LoginRequest":{"phone":"+84901234567","password":"CabPilot2026"},"RefreshRequest":{"refreshToken":"refresh-token-pilot-2026-abcdef"},
       "ProfilePatch":{"fullName":"Nguyễn Minh An Updated","version":3},"AvailabilityRequest":{"status":"ONLINE","version":3},
       "LocationRequest":{"lat":10.776889,"lng":106.700806,"receivedAt":"2026-09-29T09:15:00+07:00"},
@@ -187,7 +196,27 @@ def example_for(name):
       "PaymentCreate":{"method":"SANDBOX","sandboxScenario":"TIMEOUT_THEN_SUCCESS"},"CashConfirmation":{"received":True,"version":3},
       "ProviderCallback":{"providerEventId":"evt-cab-20260929-001","attemptId":ids["id"],"status":"SUCCEEDED","occurredAt":"2026-09-29T09:30:00+07:00"},
       "NotificationPatch":{"read":True,"version":3},"IncidentCreate":{"reason":"Xe gặp sự cố kỹ thuật"},
-      "IncidentUpdate":{"status":"RESOLVED","resolution":"CONTINUE_TRIP","note":"Đã hỗ trợ thay xe","version":3}
+      "IncidentUpdate":{"status":"RESOLVED","resolution":"CONTINUE_TRIP","note":"Đã hỗ trợ thay xe","version":3},
+      "UserResponse":{"id":user_id,"phone":"+84901234567","roles":["CUSTOMER"],"status":"ACTIVE"},
+      "DriverApplication":{"id":ids["id"],"driverId":user_id,"status":"PENDING_REVIEW"},
+      "AuthTokens":{"accessToken":"access-token-pilot-2026-abcdefgh","refreshToken":"refresh-token-pilot-2026-abcdefgh","tokenType":"Bearer","expiresIn":900},
+      "Profile":{"userId":user_id,"fullName":"Nguyễn Minh An","version":3},
+      "Availability":{"driverId":user_id,"status":"ONLINE","lastLocationAt":"2026-09-29T09:15:00+07:00","version":3},
+      "Location":{"driverId":user_id,"lat":10.776889,"lng":106.700806,"receivedAt":"2026-09-29T09:15:00+07:00","accepted":True},
+      "User":{"id":user_id,"phone":"+84905551234","roles":["OPERATOR"],"status":"ACTIVE","mustChangePassword":True},
+      "RideRequest":{"id":ids["id"],"customerId":user_id,"pickup":{"lat":10.776889,"lng":106.700806},"destination":{"lat":10.781234,"lng":106.695321},"vehicleTypeId":ids["vehicleTypeId"],"quotedFareVnd":11000,"priceVersionId":price_id,"status":"SEARCHING","version":3},
+      "RideOffer":{"id":ids["id"],"rideRequestId":trip_id,"driverId":user_id,"expiresAt":"2026-09-29T09:15:20+07:00","status":"ACCEPTED","version":3},
+      "Trip":{"id":trip_id,"rideRequestId":ids["id"],"driverId":user_id,"status":"IN_PROGRESS","distanceMeters":2001,"distanceSource":"DRIVER_LOCATIONS","version":3},
+      "Rating":{"id":ids["id"],"tripId":trip_id,"customerId":user_id,"score":5,"comment":"Tài xế lịch sự"},
+      "FareEstimate":{"estimated":True,"distanceMeters":2001,"quotedFareVnd":11000,"priceVersionId":price_id},
+      "Fare":{"id":ids["id"],"tripId":trip_id,"priceVersionId":price_id,"distanceMeters":2001,"distanceSource":"DRIVER_LOCATIONS","amountVnd":11000,"status":"FINALIZED","version":3},
+      "Payment":{"id":ids["id"],"tripId":trip_id,"method":"SANDBOX","status":"SUCCEEDED","paidAt":"2026-09-29T09:30:00+07:00","version":3},
+      "NotificationPage":{"items":[],"page":1,"size":20,"total":12},
+      "Notification":{"id":ids["id"],"recipientId":user_id,"eventId":price_id,"type":"TripStatusChanged","readAt":"2026-09-29T09:31:00+07:00"},
+      "SSE":"id: 550e8400-e29b-41d4-a716-446655440000\nevent: TripStatusChanged\ndata: {\"tripId\":\"550e8400-e29b-41d4-a716-446655440001\",\"status\":\"IN_PROGRESS\"}\n\n",
+      "ActiveTripPage":{"items":[],"asOf":"2026-09-29T09:32:00+07:00"},
+      "Incident":{"id":ids["id"],"tripId":trip_id,"source":"DRIVER","reason":"Xe gặp sự cố kỹ thuật","status":"OPEN","version":3},
+      "Report":{"from":"2026-09-01T00:00:00+07:00","to":"2026-10-01T00:00:00+07:00","timezone":"Asia/Ho_Chi_Minh","tripCount":120,"revenueVnd":1450000,"completionRate":0.91,"cancellationRate":0.09,"findDriverRate":0.88,"acceptanceRate":0.76,"averageRating":4.8,"asOf":"2026-09-29T09:32:00+07:00"}
     }
     return ex.get(name,{"id":ids["id"],"status":"ACTIVE","version":3})
 
@@ -226,10 +255,10 @@ def shared_components():
     params={
       "IdempotencyKey":{"name":"Idempotency-Key","in":"header","required":True,"description":"UUID giữ trong 24 giờ theo DEC-34.","schema":s("string",format="uuid"),"example":"550e8400-e29b-41d4-a716-446655440000"},
       "ResourceId":{"name":"id","in":"path","required":True,"schema":s("string",format="uuid"),"example":"550e8400-e29b-41d4-a716-446655440001"},
-      "ProviderSignature":{"name":"X-Signature","in":"header","required":True,"description":"Chữ ký HMAC callback theo DEC-27.","schema":s("string",minLength=32),"example":"sha256=7e9d8f6c5b4a3210dcbafedcba0123456789abcd"},
+      "ProviderSignature":{"name":"X-Signature","in":"header","required":True,"description":"Chữ ký HMAC callback theo DEC-27.","schema":s("string",minLength=32),"example":"sha256=7e9d8f6c5b4a3210dcbafedcba0123456789abcd","x-assumption":True},
       "LastEventId":{"name":"Last-Event-ID","in":"header","required":False,"schema":s("string",format="uuid"),"example":"550e8400-e29b-41d4-a716-446655440002"},
-      "Page":{"name":"page","in":"query","required":False,"schema":s("integer",minimum=1,maximum=1000,default=1),"example":1},
-      "Size":{"name":"size","in":"query","required":False,"schema":s("integer",minimum=1,maximum=100,default=20),"example":20},
+      "Page":{"name":"page","in":"query","required":False,"schema":s("integer",minimum=1,maximum=1000,default=1),"example":1,"x-assumption":True},
+      "Size":{"name":"size","in":"query","required":False,"schema":s("integer",minimum=1,maximum=100,default=20),"example":20,"x-assumption":True},
       "TripStatusFilter":{"name":"status","in":"query","required":False,"schema":s("string",enum=["ASSIGNED","ARRIVED_AT_PICKUP","IN_PROGRESS"]),"example":"IN_PROGRESS"},
       "From":{"name":"from","in":"query","required":True,"description":"Đầu kỳ bao gồm, Asia/Ho_Chi_Minh.","schema":DT,"example":"2026-09-01T00:00:00+07:00"},
       "To":{"name":"to","in":"query","required":True,"description":"Cuối kỳ loại trừ, tối đa 366 ngày.","schema":DT,"example":"2026-10-01T00:00:00+07:00"},
@@ -247,12 +276,20 @@ def dump(path,data):
 
 def make_monolith():
     sch=schemas(); params,errors=shared_components()
+    def internalize_schema_refs(node):
+        if isinstance(node,dict):
+            if isinstance(node.get("$ref"),str) and node["$ref"].startswith("#/"):
+                node["$ref"]="#/components/schemas/"+node["$ref"][2:]
+            for value in node.values(): internalize_schema_refs(value)
+        elif isinstance(node,list):
+            for value in node: internalize_schema_refs(value)
+    internalize_schema_refs(sch)
     # Internal component responses must point to the internal Error schema.
     mon_errors=copy.deepcopy(errors)
     for r in mon_errors.values(): r["content"]["application/json"]["schema"]["$ref"]="#/components/schemas/Error"
     paths={}
     for row in API_ROWS: paths.setdefault(row[3],{})[row[2].lower()]=operation(row,False)
-    doc={"openapi":"3.0.3","info":{"title":"CAB System API","version":"0.1.0-pilot","description":"API cho CAB System — đồ án 7 tuần. Baseline theo DEC-01–38 trong SRS."},"servers":[{"url":"https://api.cab-system.local/api/v1","description":"Pilot environment (mock)"}],"tags":[{"name":n} for n in ["Identity&Driver","Ride","Billing","Notification","Operations&Reporting"]],"paths":paths,"components":{"securitySchemes":{"bearerAuth":{"type":"http","scheme":"bearer","bearerFormat":"JWT"}},"schemas":sch,"responses":mon_errors,"parameters":params}}
+    doc={"openapi":"3.0.3","info":{"title":"CAB System API","version":"0.1.0-pilot","description":"API cho CAB System — đồ án 7 tuần. Baseline theo DEC-01–38 trong SRS."},"servers":[{"url":"https://api.cab-system.local/api/v1","description":"Pilot environment (mock)"}],"tags":[{"name":n,"description":f"API thuộc service {n}."} for n in ["Identity&Driver","Ride","Billing","Notification","Operations&Reporting"]],"paths":paths,"components":{"securitySchemes":{"bearerAuth":{"type":"http","scheme":"bearer","bearerFormat":"JWT"}},"schemas":sch,"responses":mon_errors,"parameters":params}}
     dump(ROOT/"_manifest.yaml",manifest()); dump(ROOT/"openapi.yaml",doc)
     dump(Path(tempfile.gettempdir())/"openapi.monolith.yaml",doc)
 
@@ -266,7 +303,7 @@ def make_split():
     for row in API_ROWS:
         pointer=row[3].replace("~","~0").replace("/","~1")
         pathrefs[row[3]]={"$ref":f"./{row[-1]}#/{pointer}"}
-    doc={"openapi":"3.0.3","info":{"title":"CAB System API","version":"0.1.0-pilot","description":"API cho CAB System — đồ án 7 tuần. Baseline theo DEC-01–38 trong SRS."},"servers":[{"url":"https://api.cab-system.local/api/v1","description":"Pilot environment (mock)"}],"tags":[{"name":n} for n in ["Identity&Driver","Ride","Billing","Notification","Operations&Reporting"]],"paths":pathrefs,"components":{"securitySchemes":{"bearerAuth":{"type":"http","scheme":"bearer","bearerFormat":"JWT"}},"schemas":{n:{"$ref":f"./_common/schemas.yaml#/{n}"} for n in sch},"responses":{n:{"$ref":f"./_common/errors.yaml#/{n}"} for n in errors},"parameters":{n:{"$ref":f"./_common/parameters.yaml#/{n}"} for n in params}}}
+    doc={"openapi":"3.0.3","info":{"title":"CAB System API","version":"0.1.0-pilot","description":"API cho CAB System — đồ án 7 tuần. Baseline theo DEC-01–38 trong SRS."},"servers":[{"url":"https://api.cab-system.local/api/v1","description":"Pilot environment (mock)"}],"tags":[{"name":n,"description":f"API thuộc service {n}."} for n in ["Identity&Driver","Ride","Billing","Notification","Operations&Reporting"]],"paths":pathrefs,"components":{"securitySchemes":{"bearerAuth":{"type":"http","scheme":"bearer","bearerFormat":"JWT"}},"schemas":{n:{"$ref":f"./_common/schemas.yaml#/{n}"} for n in sch},"responses":{n:{"$ref":f"./_common/errors.yaml#/{n}"} for n in errors},"parameters":{n:{"$ref":f"./_common/parameters.yaml#/{n}"} for n in params}}}
     dump(ROOT/"openapi.yaml",doc)
 
 if __name__=="__main__":

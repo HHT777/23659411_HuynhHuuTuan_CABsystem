@@ -1,0 +1,64 @@
+/trips/{id}/cancellation:
+  post:
+    tags:
+    - Ride
+    operationId: cancelTrip
+    summary: Hủy chuyến trước đón
+    description: 'UC-09.2. Tiền điều kiện: Trip trước PICKED_UP; version đúng. Hậu điều kiện thành công: CANCELLED; không
+      tự điều phối lại.'
+    x-api-id: API-15
+    x-uc: UC-09.2
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    x-fr:
+    - FR-22
+    - FR-41
+    - FR-53
+    x-dec:
+    - DEC-20
+    - DEC-21
+    - DEC-34
+    x-brule:
+    - BRULE-07
+    x-idempotency: key+version
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/Cancellation
+          example:
+            reason: Đổi kế hoạch
+            version: 3
+    responses:
+      '200':
+        description: CANCELLED; không tự điều phối lại
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Trip
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440001
+              rideRequestId: 550e8400-e29b-41d4-a716-446655440000
+              driverId: 550e8400-e29b-41d4-a716-446655440002
+              status: IN_PROGRESS
+              distanceMeters: 2001
+              distanceSource: DRIVER_LOCATIONS
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

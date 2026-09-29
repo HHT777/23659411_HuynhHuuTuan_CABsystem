@@ -1,0 +1,55 @@
+/auth/register:
+  post:
+    tags:
+    - Identity&Driver
+    operationId: registerCustomer
+    summary: Đăng ký khách hàng
+    description: 'UC-01.1. Tiền điều kiện: phone chưa tồn tại. Hậu điều kiện thành công: Tạo User CUSTOMER ACTIVE và CustomerProfile.'
+    x-api-id: API-01
+    x-uc: UC-01.1
+    x-roles:
+    - Public
+    x-fr:
+    - FR-01
+    - FR-49
+    x-dec:
+    - DEC-29
+    - DEC-33
+    x-brule:
+    - BRULE-01
+    x-idempotency: key
+    x-rate-limit: 10/min/IP
+    security: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/RegisterRequest
+          example:
+            phone: '+84901234567'
+            password: CabPilot2026
+            fullName: Nguyễn Minh An
+    responses:
+      '201':
+        description: Tạo User CUSTOMER ACTIVE và CustomerProfile
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/UserResponse
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440002
+              phone: '+84901234567'
+              roles:
+              - CUSTOMER
+              status: ACTIVE
+      '400':
+        $ref: ../_common/errors.yaml#/BadRequest
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

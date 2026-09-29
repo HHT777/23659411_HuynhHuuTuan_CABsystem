@@ -1,0 +1,66 @@
+/auth/driver-registrations:
+  post:
+    tags:
+    - Identity&Driver
+    operationId: registerDriver
+    summary: Đăng ký tài xế
+    description: 'UC-01.2. Tiền điều kiện: phone chưa tồn tại. Hậu điều kiện thành công: Tạo hồ sơ PENDING_REVIEW/OFFLINE.'
+    x-api-id: API-02
+    x-uc: UC-01.2
+    x-roles:
+    - Public
+    x-fr:
+    - FR-02
+    - FR-49
+    x-dec:
+    - DEC-02
+    - DEC-25
+    - DEC-33
+    x-brule:
+    - BRULE-02
+    x-idempotency: key
+    x-rate-limit: 10/min/IP
+    security: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/DriverRegistrationRequest
+          example:
+            phone: '+84909876543'
+            password: Driver2026
+            fullName: Trần Văn Bình
+            vehicleTypeId: 550e8400-e29b-41d4-a716-446655440010
+            plate: 59A1-12345
+            documents:
+            - type: GPLX
+              fileKey: private/gplx-2026.pdf
+              maskedValue: '******1234'
+            - type: CCCD
+              fileKey: private/cccd-2026.pdf
+              maskedValue: '******5678'
+            - type: VEHICLE_REGISTRATION
+              fileKey: private/vehicle-2026.pdf
+              maskedValue: 59A1-*****
+    responses:
+      '201':
+        description: Tạo hồ sơ PENDING_REVIEW/OFFLINE
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/DriverApplication
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              driverId: 550e8400-e29b-41d4-a716-446655440002
+              status: PENDING_REVIEW
+      '400':
+        $ref: ../_common/errors.yaml#/BadRequest
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

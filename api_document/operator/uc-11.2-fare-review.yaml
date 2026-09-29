@@ -1,0 +1,65 @@
+/fares/{id}/reviews:
+  post:
+    tags:
+    - Billing
+    operationId: reviewFare
+    summary: Xác minh khoảng cách Fare review
+    description: 'UC-11.2. Tiền điều kiện: Fare FARE_REVIEW_REQUIRED; có quyền/version. Hậu điều kiện thành công: Fare FINALIZED
+      và AuditRecorded.'
+    x-api-id: API-20
+    x-uc: UC-11.2
+    x-roles:
+    - OPERATOR
+    x-fr:
+    - FR-34
+    - FR-44
+    x-dec:
+    - DEC-22
+    - DEC-34
+    x-brule:
+    - BRULE-08
+    - BRULE-12
+    - BRULE-14
+    x-idempotency: key+version
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/FareReviewRequest
+          example:
+            distanceMeters: 2001
+            reason: Đã đối chiếu hành trình GPS
+            version: 3
+    responses:
+      '200':
+        description: Fare FINALIZED và AuditRecorded
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Fare
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              tripId: 550e8400-e29b-41d4-a716-446655440001
+              priceVersionId: 550e8400-e29b-41d4-a716-446655440003
+              distanceMeters: 2001
+              distanceSource: DRIVER_LOCATIONS
+              amountVnd: 11000
+              status: FINALIZED
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

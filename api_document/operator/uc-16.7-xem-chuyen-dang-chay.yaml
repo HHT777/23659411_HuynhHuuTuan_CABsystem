@@ -1,0 +1,44 @@
+/operations/trips/active:
+  get:
+    tags:
+    - Operations&Reporting
+    operationId: listActiveTrips
+    summary: Xem chuyến đang diễn ra
+    description: 'UC-16.7. Tiền điều kiện: có permission. Hậu điều kiện thành công: Trả Trip hoạt động, driver, vị trí và
+      tuổi trạng thái.'
+    x-api-id: API-27
+    x-uc: UC-16.7
+    x-roles:
+    - OPERATOR
+    x-fr:
+    - FR-42
+    x-dec:
+    - DEC-31
+    - DEC-32
+    x-brule:
+    - BRULE-12
+    - BRULE-16
+    x-idempotency: none
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/Page
+    - $ref: ../_common/parameters.yaml#/Size
+    - $ref: ../_common/parameters.yaml#/TripStatusFilter
+    responses:
+      '200':
+        description: Trả Trip hoạt động, driver, vị trí và tuổi trạng thái
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/ActiveTripPage
+            example:
+              items: []
+              asOf: '2026-09-29T09:32:00+07:00'
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

@@ -1,0 +1,60 @@
+/trips/{id}/incidents:
+  post:
+    tags:
+    - Operations&Reporting
+    operationId: createIncident
+    summary: Báo sự cố chuyến
+    description: 'UC-17.1. Tiền điều kiện: actor thuộc Trip hoặc OPERATOR. Hậu điều kiện thành công: Incident OPEN idempotent.'
+    x-api-id: API-28
+    x-uc: UC-17.1
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    - OPERATOR
+    x-fr:
+    - FR-34
+    - FR-35
+    x-dec:
+    - DEC-15
+    - DEC-34
+    x-brule:
+    - BRULE-14
+    x-idempotency: key
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/IncidentCreate
+          example:
+            reason: Xe gặp sự cố kỹ thuật
+    responses:
+      '201':
+        description: Incident OPEN idempotent
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Incident
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              tripId: 550e8400-e29b-41d4-a716-446655440001
+              source: DRIVER
+              reason: Xe gặp sự cố kỹ thuật
+              status: OPEN
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

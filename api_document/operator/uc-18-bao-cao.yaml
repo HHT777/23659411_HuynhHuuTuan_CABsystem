@@ -1,0 +1,57 @@
+/reports/operations:
+  get:
+    tags:
+    - Operations&Reporting
+    operationId: getOperationsReport
+    summary: Xem báo cáo vận hành
+    description: 'UC-18.1/18.2. Tiền điều kiện: kỳ hợp lệ; from bao gồm, to loại trừ. Hậu điều kiện thành công: Trả count,
+      revenue và các tỷ lệ với asOf.'
+    x-api-id: API-30
+    x-uc: UC-18.1/18.2
+    x-roles:
+    - OPERATOR
+    - ADMIN
+    - EXECUTIVE
+    x-fr:
+    - FR-36
+    - FR-37
+    - FR-38
+    - FR-52
+    x-dec:
+    - DEC-31
+    x-brule:
+    - BRULE-16
+    x-idempotency: none
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/From
+    - $ref: ../_common/parameters.yaml#/To
+    responses:
+      '200':
+        description: Trả count, revenue và các tỷ lệ với asOf
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Report
+            example:
+              from: '2026-09-01T00:00:00+07:00'
+              to: '2026-10-01T00:00:00+07:00'
+              timezone: Asia/Ho_Chi_Minh
+              tripCount: 120
+              revenueVnd: 1450000
+              completionRate: 0.91
+              cancellationRate: 0.09
+              findDriverRate: 0.88
+              acceptanceRate: 0.76
+              averageRating: 4.8
+              asOf: '2026-09-29T09:32:00+07:00'
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

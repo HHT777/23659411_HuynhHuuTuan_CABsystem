@@ -1,0 +1,50 @@
+/trips/{id}/fare:
+  get:
+    tags:
+    - Billing
+    operationId: getTripFare
+    summary: Xem cước chuyến
+    description: 'UC-11. Tiền điều kiện: Trip thuộc actor. Hậu điều kiện thành công: Trả Fare FINALIZED hoặc FARE_REVIEW_REQUIRED.'
+    x-api-id: API-19
+    x-uc: UC-11
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    x-fr:
+    - FR-23
+    x-dec:
+    - DEC-06
+    - DEC-22
+    - DEC-23
+    x-brule:
+    - BRULE-08
+    x-idempotency: none
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    responses:
+      '200':
+        description: Trả Fare FINALIZED hoặc FARE_REVIEW_REQUIRED
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Fare
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              tripId: 550e8400-e29b-41d4-a716-446655440001
+              priceVersionId: 550e8400-e29b-41d4-a716-446655440003
+              distanceMeters: 2001
+              distanceSource: DRIVER_LOCATIONS
+              amountVnd: 11000
+              status: FINALIZED
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '404':
+        $ref: ../_common/errors.yaml#/NotFound
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

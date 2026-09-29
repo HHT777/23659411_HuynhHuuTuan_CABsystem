@@ -1,0 +1,57 @@
+/drivers/me/location:
+  put:
+    tags:
+    - Identity&Driver
+    operationId: updateDriverLocation
+    summary: Cập nhật vị trí tài xế
+    description: 'UC-08. Tiền điều kiện: ONLINE/ON_TRIP; bản tin mới hơn. Hậu điều kiện thành công: Lưu vị trí; cộng distance
+      nếu hợp lệ.'
+    x-api-id: API-07
+    x-uc: UC-08
+    x-roles:
+    - DRIVER
+    x-fr:
+    - FR-21
+    - FR-47
+    - FR-50
+    x-dec:
+    - DEC-18
+    - DEC-22
+    - DEC-30
+    x-brule:
+    - BRULE-04
+    x-idempotency: newer-wins
+    x-rate-limit: 12/min/driver
+    security:
+    - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/LocationRequest
+          example:
+            lat: 10.776889
+            lng: 106.700806
+            receivedAt: '2026-09-29T09:15:00+07:00'
+    responses:
+      '200':
+        description: Lưu vị trí; cộng distance nếu hợp lệ
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Location
+            example:
+              driverId: 550e8400-e29b-41d4-a716-446655440002
+              lat: 10.776889
+              lng: 106.700806
+              receivedAt: '2026-09-29T09:15:00+07:00'
+              accepted: true
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

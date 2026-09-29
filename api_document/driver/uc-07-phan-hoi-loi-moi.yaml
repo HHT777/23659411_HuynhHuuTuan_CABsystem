@@ -1,0 +1,62 @@
+/ride-offers/{id}/responses:
+  post:
+    tags:
+    - Ride
+    operationId: respondToRideOffer
+    summary: Phản hồi lời mời
+    description: 'UC-07.1/07.2. Tiền điều kiện: Offer PENDING, còn hạn và version đúng. Hậu điều kiện thành công: Ghi nhận
+      ACCEPT/DECLINE theo quy tắc cạnh tranh.'
+    x-api-id: API-13
+    x-uc: UC-07.1/07.2
+    x-roles:
+    - DRIVER
+    x-fr:
+    - FR-13
+    - FR-14
+    x-dec:
+    - DEC-16
+    - DEC-17
+    - DEC-34
+    x-brule:
+    - BRULE-06
+    - BRULE-07
+    x-idempotency: key+version
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/OfferDecision
+          example:
+            decision: ACCEPT
+            version: 3
+    responses:
+      '200':
+        description: Ghi nhận ACCEPT/DECLINE theo quy tắc cạnh tranh
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/RideOffer
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              rideRequestId: 550e8400-e29b-41d4-a716-446655440001
+              driverId: 550e8400-e29b-41d4-a716-446655440002
+              expiresAt: '2026-09-29T09:15:20+07:00'
+              status: ACCEPTED
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '410':
+        $ref: ../_common/errors.yaml#/Gone
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

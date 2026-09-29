@@ -1,0 +1,63 @@
+/trips/{id}/payments:
+  post:
+    tags:
+    - Billing
+    operationId: createPayment
+    summary: Khởi tạo thanh toán điện tử
+    description: 'UC-12.2. Tiền điều kiện: Fare FINALIZED; không PENDING/UNKNOWN/SUCCEEDED. Hậu điều kiện thành công: PaymentAttempt
+      PENDING và paymentUrl giả.'
+    x-api-id: API-21
+    x-uc: UC-12.2
+    x-roles:
+    - CUSTOMER
+    x-fr:
+    - FR-24
+    - FR-25
+    - FR-26
+    - FR-27
+    - FR-54
+    x-dec:
+    - DEC-27
+    - DEC-28
+    - DEC-34
+    x-brule:
+    - BRULE-09
+    - BRULE-10
+    x-idempotency: key
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/PaymentCreate
+          example:
+            method: SANDBOX
+            sandboxScenario: TIMEOUT_THEN_SUCCESS
+    responses:
+      '201':
+        description: PaymentAttempt PENDING và paymentUrl giả
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Payment
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              tripId: 550e8400-e29b-41d4-a716-446655440001
+              method: SANDBOX
+              status: SUCCEEDED
+              paidAt: '2026-09-29T09:30:00+07:00'
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

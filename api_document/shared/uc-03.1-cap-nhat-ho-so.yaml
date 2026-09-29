@@ -1,0 +1,54 @@
+/me/profile:
+  patch:
+    tags:
+    - Identity&Driver
+    operationId: updateMyProfile
+    summary: Cập nhật hồ sơ chung
+    description: 'UC-03.1. Tiền điều kiện: đã xác thực, sở hữu hồ sơ. Hậu điều kiện thành công: Lưu profile/version mới.'
+    x-api-id: API-05
+    x-uc: UC-03.1
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    x-fr:
+    - FR-05
+    x-dec:
+    - DEC-34
+    x-brule:
+    - BRULE-12
+    x-idempotency: key+version
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/ProfilePatch
+          example:
+            fullName: Nguyễn Minh An Updated
+            version: 3
+    responses:
+      '200':
+        description: Lưu profile/version mới
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Profile
+            example:
+              userId: 550e8400-e29b-41d4-a716-446655440002
+              fullName: Nguyễn Minh An
+              version: 3
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

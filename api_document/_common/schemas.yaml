@@ -1,0 +1,1258 @@
+User:
+  type: object
+  properties:
+    id: &id001
+      type: string
+      format: uuid
+      maxLength: 36
+    phone: &id005
+      type: string
+      pattern: ^\+[1-9][0-9]{7,14}$
+      maxLength: 15
+    passwordHash:
+      type: string
+      maxLength: 255
+      writeOnly: true
+    roles:
+      type: array
+      minItems: 1
+      maxItems: 5
+      uniqueItems: true
+      items:
+        type: string
+        enum:
+        - CUSTOMER
+        - DRIVER
+        - OPERATOR
+        - ADMIN
+        - EXECUTIVE
+    status:
+      type: string
+      enum:
+      - PENDING
+      - ACTIVE
+      - LOCKED
+      - DISABLED
+    mustChangePassword:
+      type: boolean
+  required:
+  - id
+  - phone
+  - passwordHash
+  - roles
+  - status
+  - mustChangePassword
+CustomerProfile:
+  type: object
+  properties:
+    userId: *id001
+    fullName:
+      type: string
+      maxLength: 120
+    createdAt: &id004
+      type: string
+      format: date-time
+  required:
+  - userId
+  - fullName
+  - createdAt
+DriverProfile:
+  type: object
+  properties:
+    userId: *id001
+    fullName:
+      type: string
+      maxLength: 120
+    ratingAverage:
+      type: number
+      format: float
+      minimum: 1
+      maximum: 5
+      nullable: true
+    version: &id003
+      type: integer
+      minimum: 1
+      example: 3
+  required:
+  - userId
+  - fullName
+  - version
+Vehicle:
+  type: object
+  properties:
+    id: *id001
+    driverId: *id001
+    vehicleTypeId: *id001
+    plate:
+      type: string
+      maxLength: 15
+    status:
+      type: string
+      enum:
+      - PENDING_REVIEW
+      - ACTIVE
+      - SUSPENDED
+      - RETIRED
+  required:
+  - id
+  - driverId
+  - vehicleTypeId
+  - plate
+  - status
+RideRequest:
+  type: object
+  properties:
+    id: *id001
+    customerId: *id001
+    pickup: &id002
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 10.776889
+        lng:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 106.700806
+      required:
+      - lat
+      - lng
+    destination: *id002
+    vehicleTypeId: *id001
+    quotedFareVnd:
+      type: integer
+      minimum: 0
+      nullable: true
+    priceVersionId:
+      type: string
+      format: uuid
+      nullable: true
+      maxLength: 36
+    status:
+      type: string
+      enum:
+      - SEARCHING
+      - ASSIGNED
+      - NO_DRIVER_FOUND
+      - CANCELLED
+    version: *id003
+  required:
+  - id
+  - customerId
+  - pickup
+  - destination
+  - vehicleTypeId
+  - status
+  - version
+Trip:
+  type: object
+  properties:
+    id: *id001
+    rideRequestId: *id001
+    driverId: *id001
+    status:
+      type: string
+      enum:
+      - ASSIGNED
+      - ARRIVED_AT_PICKUP
+      - PICKED_UP
+      - IN_PROGRESS
+      - COMPLETED
+      - CANCELLED
+      - TERMINATED_BY_INCIDENT
+    distanceMeters:
+      type: integer
+      minimum: 0
+      nullable: true
+    distanceSource:
+      type: string
+      enum:
+      - DRIVER_LOCATIONS
+      - VERIFIED_BY_OPERATOR
+      nullable: true
+    version: *id003
+  required:
+  - id
+  - rideRequestId
+  - driverId
+  - status
+  - version
+DriverLocation:
+  type: object
+  properties:
+    driverId: *id001
+    lat:
+      type: number
+      format: double
+      minimum: -90
+      maximum: 90
+    lng:
+      type: number
+      format: double
+      minimum: -180
+      maximum: 180
+    receivedAt: *id004
+    tripId:
+      type: string
+      format: uuid
+      nullable: true
+      maxLength: 36
+  required:
+  - driverId
+  - lat
+  - lng
+  - receivedAt
+Fare:
+  type: object
+  properties:
+    id: *id001
+    tripId: *id001
+    priceVersionId: *id001
+    distanceMeters:
+      type: integer
+      minimum: 0
+      nullable: true
+    distanceSource:
+      type: string
+      enum:
+      - DRIVER_LOCATIONS
+      - VERIFIED_BY_OPERATOR
+      nullable: true
+    amountVnd:
+      type: integer
+      minimum: 0
+      nullable: true
+    status:
+      type: string
+      enum:
+      - PENDING
+      - FARE_REVIEW_REQUIRED
+      - FINALIZED
+    version: *id003
+  required:
+  - id
+  - tripId
+  - priceVersionId
+  - status
+  - version
+Payment:
+  type: object
+  properties:
+    id: *id001
+    tripId: *id001
+    method:
+      type: string
+      enum:
+      - CASH
+      - SANDBOX
+    status:
+      type: string
+      enum:
+      - UNPAID
+      - PENDING
+      - SUCCEEDED
+      - FAILED
+      - UNKNOWN
+    paidAt:
+      type: string
+      format: date-time
+      nullable: true
+    version: *id003
+  required:
+  - id
+  - tripId
+  - method
+  - status
+  - version
+Notification:
+  type: object
+  properties:
+    id: *id001
+    recipientId: *id001
+    eventId: *id001
+    type:
+      type: string
+      maxLength: 64
+    readAt:
+      type: string
+      format: date-time
+      nullable: true
+  required:
+  - id
+  - recipientId
+  - eventId
+  - type
+Rating:
+  type: object
+  properties:
+    id: *id001
+    tripId: *id001
+    customerId: *id001
+    score:
+      type: integer
+      minimum: 1
+      maximum: 5
+    comment:
+      type: string
+      maxLength: 500
+      nullable: true
+  required:
+  - id
+  - tripId
+  - customerId
+  - score
+AuditRecord:
+  type: object
+  properties:
+    id: *id001
+    eventId: *id001
+    actorId:
+      type: string
+      format: uuid
+      nullable: true
+    action:
+      type: string
+      maxLength: 80
+    targetId: *id001
+    beforeAfter:
+      type: object
+      nullable: true
+      additionalProperties: true
+  required:
+  - id
+  - eventId
+  - action
+  - targetId
+RideOffer:
+  type: object
+  properties:
+    id: *id001
+    rideRequestId: *id001
+    driverId: *id001
+    expiresAt: *id004
+    status:
+      type: string
+      enum:
+      - PENDING
+      - ACCEPTED
+      - DECLINED
+      - EXPIRED
+      - CANCELLED
+    version: *id003
+  required:
+  - id
+  - rideRequestId
+  - driverId
+  - expiresAt
+  - status
+  - version
+PaymentAttempt:
+  type: object
+  properties:
+    id: *id001
+    paymentId: *id001
+    scenario:
+      type: string
+      enum:
+      - SUCCESS
+      - FAIL
+      - TIMEOUT_THEN_SUCCESS
+      - TIMEOUT_THEN_FAIL
+      - DUPLICATE_CALLBACK
+    providerRef:
+      type: string
+      maxLength: 100
+      nullable: true
+    status:
+      type: string
+      enum:
+      - PENDING
+      - SUCCEEDED
+      - FAILED
+      - UNKNOWN
+  required:
+  - id
+  - paymentId
+  - scenario
+  - status
+StatusHistory:
+  type: object
+  properties:
+    id: *id001
+    aggregateType:
+      type: string
+      enum:
+      - RIDE_REQUEST
+      - TRIP
+    aggregateId: *id001
+    fromStatus:
+      type: string
+      maxLength: 40
+      nullable: true
+    toStatus:
+      type: string
+      maxLength: 40
+    actorId:
+      type: string
+      format: uuid
+      nullable: true
+    at: *id004
+  required:
+  - id
+  - aggregateType
+  - aggregateId
+  - toStatus
+  - at
+PriceVersion:
+  type: object
+  properties:
+    id: *id001
+    vehicleTypeId: *id001
+    baseFareVnd:
+      type: integer
+      minimum: 0
+    includedMeters:
+      type: integer
+      minimum: 0
+    perKmVnd:
+      type: integer
+      minimum: 0
+    effectiveAt: *id004
+    status:
+      type: string
+      enum:
+      - DRAFT
+      - ACTIVE
+      - RETIRED
+  required:
+  - id
+  - vehicleTypeId
+  - baseFareVnd
+  - includedMeters
+  - perKmVnd
+  - effectiveAt
+  - status
+AuditLog:
+  type: object
+  properties:
+    id: *id001
+    auditRecordId: *id001
+    traceId:
+      type: string
+      maxLength: 64
+    occurredAt: *id004
+  required:
+  - id
+  - auditRecordId
+  - traceId
+  - occurredAt
+Incident:
+  type: object
+  properties:
+    id: *id001
+    tripId: *id001
+    source:
+      type: string
+      enum:
+      - CUSTOMER
+      - DRIVER
+      - OPERATOR
+      - SYSTEM
+    reason:
+      type: string
+      maxLength: 500
+    status:
+      type: string
+      enum:
+      - OPEN
+      - IN_PROGRESS
+      - RESOLVED
+      - CLOSED
+    resolution:
+      type: string
+      enum:
+      - CONTINUE_TRIP
+      - CANCEL_TRIP
+      - TERMINATE_TRIP
+      - FARE_REVIEW
+      nullable: true
+    version: *id003
+  required:
+  - id
+  - tripId
+  - source
+  - reason
+  - status
+  - version
+DriverApplication:
+  type: object
+  properties:
+    id: *id001
+    driverId: *id001
+    status:
+      type: string
+      enum:
+      - PENDING_REVIEW
+      - APPROVED
+      - REJECTED
+    reviewerId:
+      type: string
+      format: uuid
+      nullable: true
+    reason:
+      type: string
+      maxLength: 500
+      nullable: true
+  required:
+  - id
+  - driverId
+  - status
+DriverDocument:
+  type: object
+  properties:
+    id: *id001
+    driverId: *id001
+    type:
+      type: string
+      enum:
+      - GPLX
+      - CCCD
+      - VEHICLE_REGISTRATION
+    fileKey:
+      type: string
+      maxLength: 255
+    maskedValue:
+      type: string
+      maxLength: 80
+    status:
+      type: string
+      enum:
+      - UPLOADED
+      - VERIFIED
+      - REJECTED
+      - REPLACED
+  required:
+  - id
+  - driverId
+  - type
+  - fileKey
+  - maskedValue
+  - status
+Availability:
+  type: object
+  properties:
+    driverId: *id001
+    status:
+      type: string
+      enum:
+      - OFFLINE
+      - ONLINE
+      - ON_TRIP
+    lastLocationAt:
+      type: string
+      format: date-time
+      nullable: true
+    version: *id003
+  required:
+  - driverId
+  - status
+  - version
+VehicleType:
+  type: object
+  properties:
+    id: *id001
+    code:
+      type: string
+      maxLength: 30
+      enum:
+      - MOTORBIKE
+      - CAR_4_SEAT
+    name:
+      type: string
+      maxLength: 80
+    active:
+      type: boolean
+  required:
+  - id
+  - code
+  - name
+  - active
+IdempotencyRecord:
+  type: object
+  properties:
+    subjectId: *id001
+    key: *id001
+    payloadHash:
+      type: string
+      maxLength: 64
+    response:
+      type: object
+      additionalProperties: true
+    expiresAt: *id004
+  required:
+  - subjectId
+  - key
+  - payloadHash
+  - response
+  - expiresAt
+OutboxEvent:
+  type: object
+  properties:
+    id: *id001
+    aggregateId: *id001
+    eventType:
+      type: string
+      maxLength: 100
+    payload:
+      type: object
+      additionalProperties: true
+    occurredAt: *id004
+    publishedAt:
+      type: string
+      format: date-time
+      nullable: true
+  required:
+  - id
+  - aggregateId
+  - eventType
+  - payload
+  - occurredAt
+RefreshToken:
+  type: object
+  properties:
+    id: *id001
+    userId: *id001
+    tokenHash:
+      type: string
+      maxLength: 255
+    expiresAt: *id004
+    revokedAt:
+      type: string
+      format: date-time
+      nullable: true
+  required:
+  - id
+  - userId
+  - tokenHash
+  - expiresAt
+LoginAttempt:
+  type: object
+  properties:
+    id: *id001
+    phoneHash:
+      type: string
+      maxLength: 64
+    ip:
+      type: string
+      maxLength: 45
+    success:
+      type: boolean
+    attemptedAt: *id004
+  required:
+  - id
+  - phoneHash
+  - ip
+  - success
+  - attemptedAt
+RateLimitCounter:
+  type: object
+  properties:
+    scopeKey:
+      type: string
+      maxLength: 160
+    windowStart: *id004
+    count:
+      type: integer
+      minimum: 0
+    expiresAt: *id004
+  required:
+  - scopeKey
+  - windowStart
+  - count
+  - expiresAt
+ReportProjection:
+  type: object
+  properties:
+    metricDate:
+      type: string
+      format: date
+    dimensions:
+      type: object
+      additionalProperties: true
+    metrics:
+      type: object
+      additionalProperties: true
+    sourceEventId: *id001
+  required:
+  - metricDate
+  - dimensions
+  - metrics
+  - sourceEventId
+Error:
+  type: object
+  properties:
+    code:
+      type: string
+      example: VERSION_CONFLICT
+    message:
+      type: string
+      example: Phiên bản dữ liệu không còn mới nhất
+  required:
+  - code
+  - message
+RegisterRequest:
+  type: object
+  properties:
+    phone: *id005
+    password: &id006
+      type: string
+      minLength: 8
+      maxLength: 128
+      pattern: ^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$
+      writeOnly: true
+      example: CabPilot2026
+    fullName:
+      type: string
+      maxLength: 120
+      example: Nguyễn Minh An
+  required:
+  - phone
+  - password
+  - fullName
+  x-assumption: true
+UserResponse:
+  type: object
+  properties:
+    id: *id001
+    phone: *id005
+    roles:
+      type: array
+      items:
+        type: string
+      example:
+      - CUSTOMER
+    status:
+      type: string
+      example: ACTIVE
+  required:
+  - id
+  - phone
+  - roles
+  - status
+  x-assumption: true
+DriverRegistrationRequest:
+  type: object
+  properties:
+    phone: *id005
+    password: *id006
+    fullName:
+      type: string
+      maxLength: 120
+    vehicleTypeId: *id001
+    plate:
+      type: string
+      maxLength: 15
+    documents:
+      type: array
+      minItems: 3
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+            - GPLX
+            - CCCD
+            - VEHICLE_REGISTRATION
+          fileKey:
+            type: string
+            maxLength: 255
+          maskedValue:
+            type: string
+            maxLength: 80
+        required:
+        - type
+        - fileKey
+        - maskedValue
+  required:
+  - phone
+  - password
+  - fullName
+  - vehicleTypeId
+  - plate
+  - documents
+  x-assumption: true
+LoginRequest:
+  type: object
+  properties:
+    phone: *id005
+    password: *id006
+  required:
+  - phone
+  - password
+  x-assumption: true
+AuthTokens:
+  type: object
+  properties:
+    accessToken:
+      type: string
+      minLength: 20
+    refreshToken:
+      type: string
+      minLength: 20
+    tokenType:
+      type: string
+      enum:
+      - Bearer
+    expiresIn:
+      type: integer
+      minimum: 1
+  required:
+  - accessToken
+  - refreshToken
+  - tokenType
+  - expiresIn
+  x-assumption: true
+RefreshRequest:
+  type: object
+  properties:
+    refreshToken:
+      type: string
+      minLength: 20
+  required:
+  - refreshToken
+  x-assumption: true
+ProfilePatch:
+  type: object
+  properties:
+    fullName:
+      type: string
+      maxLength: 120
+    version: *id003
+  required:
+  - version
+  x-assumption: true
+Profile:
+  type: object
+  properties:
+    userId: *id001
+    fullName:
+      type: string
+      maxLength: 120
+    version: *id003
+  required:
+  - userId
+  - fullName
+  - version
+  x-assumption: true
+AvailabilityRequest:
+  type: object
+  properties:
+    status:
+      type: string
+      enum:
+      - ONLINE
+      - OFFLINE
+    version: *id003
+  required:
+  - status
+  - version
+  x-assumption: true
+LocationRequest:
+  type: object
+  properties:
+    lat:
+      type: number
+      minimum: -90
+      maximum: 90
+    lng:
+      type: number
+      minimum: -180
+      maximum: 180
+    receivedAt: *id004
+    tripId:
+      type: string
+      format: uuid
+      nullable: true
+  required:
+  - lat
+  - lng
+  - receivedAt
+  x-assumption: true
+Location:
+  type: object
+  properties:
+    driverId: *id001
+    lat:
+      type: number
+    lng:
+      type: number
+    receivedAt: *id004
+    accepted:
+      type: boolean
+  required:
+  - driverId
+  - lat
+  - lng
+  - receivedAt
+  - accepted
+  x-assumption: true
+InternalUserCreate:
+  type: object
+  properties:
+    phone: *id005
+    fullName:
+      type: string
+      maxLength: 120
+    role:
+      type: string
+      enum:
+      - OPERATOR
+      - EXECUTIVE
+    temporaryPassword: *id006
+  required:
+  - phone
+  - fullName
+  - role
+  - temporaryPassword
+  x-assumption: true
+AccountAction:
+  type: object
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+    version: *id003
+  required:
+  - reason
+  - version
+  x-assumption: true
+RideRequestCreate:
+  type: object
+  properties:
+    pickup: *id002
+    destination: *id002
+    vehicleTypeId: *id001
+  required:
+  - pickup
+  - destination
+  - vehicleTypeId
+  x-assumption: true
+Cancellation:
+  type: object
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+    version: *id003
+  required:
+  - reason
+  - version
+  x-assumption: true
+OfferDecision:
+  type: object
+  properties:
+    decision:
+      type: string
+      enum:
+      - ACCEPT
+      - DECLINE
+    version: *id003
+  required:
+  - decision
+  - version
+  x-assumption: true
+TripStatusUpdate:
+  type: object
+  properties:
+    status:
+      type: string
+      enum:
+      - ARRIVED_AT_PICKUP
+      - PICKED_UP
+      - IN_PROGRESS
+      - COMPLETED
+    version: *id003
+  required:
+  - status
+  - version
+  x-assumption: true
+RatingCreate:
+  type: object
+  properties:
+    score:
+      type: integer
+      minimum: 1
+      maximum: 5
+    comment:
+      type: string
+      maxLength: 500
+  required:
+  - score
+  x-assumption: true
+FareEstimateRequest:
+  type: object
+  properties:
+    pickup: *id002
+    destination: *id002
+    vehicleTypeId: *id001
+  required:
+  - pickup
+  - destination
+  - vehicleTypeId
+  x-assumption: true
+FareEstimate:
+  type: object
+  properties:
+    estimated:
+      type: boolean
+      enum:
+      - true
+    distanceMeters:
+      type: integer
+      minimum: 0
+    quotedFareVnd:
+      type: integer
+      minimum: 0
+    priceVersionId: *id001
+  required:
+  - estimated
+  - distanceMeters
+  - quotedFareVnd
+  - priceVersionId
+  x-assumption: true
+FareReviewRequest:
+  type: object
+  properties:
+    distanceMeters:
+      type: integer
+      minimum: 1
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+    version: *id003
+  required:
+  - distanceMeters
+  - reason
+  - version
+  x-assumption: true
+PaymentCreate:
+  type: object
+  properties:
+    method:
+      type: string
+      enum:
+      - SANDBOX
+    sandboxScenario:
+      type: string
+      enum:
+      - SUCCESS
+      - FAIL
+      - TIMEOUT_THEN_SUCCESS
+      - TIMEOUT_THEN_FAIL
+      - DUPLICATE_CALLBACK
+  required:
+  - method
+  - sandboxScenario
+  x-assumption: true
+CashConfirmation:
+  type: object
+  properties:
+    received:
+      type: boolean
+      enum:
+      - true
+    version: *id003
+  required:
+  - received
+  - version
+  x-assumption: true
+ProviderCallback:
+  type: object
+  properties:
+    providerEventId:
+      type: string
+      maxLength: 100
+    attemptId: *id001
+    status:
+      type: string
+      enum:
+      - SUCCEEDED
+      - FAILED
+      - UNKNOWN
+    occurredAt: *id004
+  required:
+  - providerEventId
+  - attemptId
+  - status
+  - occurredAt
+  x-assumption: true
+NotificationPage:
+  type: object
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/Notification'
+    page:
+      type: integer
+      minimum: 1
+      maximum: 1000
+    size:
+      type: integer
+      minimum: 1
+      maximum: 100
+    total:
+      type: integer
+      minimum: 0
+  required:
+  - items
+  - page
+  - size
+  - total
+  x-assumption: true
+NotificationPatch:
+  type: object
+  properties:
+    read:
+      type: boolean
+      enum:
+      - true
+    version: *id003
+  required:
+  - read
+  - version
+  x-assumption: true
+SSE:
+  type: string
+  example: 'id: 550e8400-e29b-41d4-a716-446655440000
+
+    event: TripStatusChanged
+
+    data: {"tripId":"550e8400-e29b-41d4-a716-446655440001","status":"IN_PROGRESS"}
+
+
+    '
+  x-assumption: true
+ActiveTripPage:
+  type: object
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/Trip'
+    asOf: *id004
+  required:
+  - items
+  - asOf
+  x-assumption: true
+IncidentCreate:
+  type: object
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 500
+  required:
+  - reason
+  x-assumption: true
+IncidentUpdate:
+  type: object
+  properties:
+    status:
+      type: string
+      enum:
+      - IN_PROGRESS
+      - RESOLVED
+      - CLOSED
+    resolution:
+      type: string
+      enum:
+      - CONTINUE_TRIP
+      - CANCEL_TRIP
+      - TERMINATE_TRIP
+      - FARE_REVIEW
+    note:
+      type: string
+      maxLength: 500
+    version: *id003
+  required:
+  - status
+  - version
+  x-assumption: true
+Report:
+  type: object
+  properties:
+    from:
+      type: string
+      format: date-time
+    to:
+      type: string
+      format: date-time
+    timezone:
+      type: string
+      enum:
+      - Asia/Ho_Chi_Minh
+    tripCount:
+      type: integer
+      minimum: 0
+    revenueVnd:
+      type: integer
+      minimum: 0
+    completionRate:
+      type: number
+      minimum: 0
+      maximum: 1
+      nullable: true
+    cancellationRate:
+      type: number
+      minimum: 0
+      maximum: 1
+      nullable: true
+    findDriverRate:
+      type: number
+      minimum: 0
+      maximum: 1
+      nullable: true
+    acceptanceRate:
+      type: number
+      minimum: 0
+      maximum: 1
+      nullable: true
+    averageRating:
+      type: number
+      minimum: 1
+      maximum: 5
+      nullable: true
+    asOf: *id004
+  required:
+  - from
+  - to
+  - timezone
+  - tripCount
+  - revenueVnd
+  - asOf
+  x-assumption: true
+Last-Event-ID:
+  type: string
+  x-assumption: true
+filters:
+  type: object
+  properties:
+    status:
+      type: string
+  x-assumption: true
+query:
+  type: object
+  properties:
+    from: *id004
+    to: *id004
+  x-assumption: true

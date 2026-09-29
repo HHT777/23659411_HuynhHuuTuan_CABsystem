@@ -1,0 +1,56 @@
+/trips/{id}/ratings:
+  post:
+    tags:
+    - Ride
+    operationId: createRating
+    summary: Đánh giá tài xế
+    description: 'UC-15. Tiền điều kiện: Trip COMPLETED của khách, trong 7 ngày. Hậu điều kiện thành công: Tạo một Rating.'
+    x-api-id: API-17
+    x-uc: UC-15
+    x-roles:
+    - CUSTOMER
+    x-fr:
+    - FR-30
+    x-dec:
+    - DEC-34
+    x-brule:
+    - BRULE-15
+    x-idempotency: key
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/ResourceId
+    - $ref: ../_common/parameters.yaml#/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../_common/schemas.yaml#/RatingCreate
+          example:
+            score: 5
+            comment: Tài xế lịch sự
+    responses:
+      '201':
+        description: Tạo một Rating
+        content:
+          application/json:
+            schema:
+              $ref: ../_common/schemas.yaml#/Rating
+            example:
+              id: 550e8400-e29b-41d4-a716-446655440000
+              tripId: 550e8400-e29b-41d4-a716-446655440001
+              customerId: 550e8400-e29b-41d4-a716-446655440002
+              score: 5
+              comment: Tài xế lịch sự
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '403':
+        $ref: ../_common/errors.yaml#/Forbidden
+      '409':
+        $ref: ../_common/errors.yaml#/Conflict
+      '422':
+        $ref: ../_common/errors.yaml#/UnprocessableEntity
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

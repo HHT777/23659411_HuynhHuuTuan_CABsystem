@@ -1,0 +1,48 @@
+/me/events:
+  get:
+    tags:
+    - Notification
+    operationId: streamMyEvents
+    summary: Theo dõi sự kiện SSE
+    description: 'UC-13.2. Tiền điều kiện: đã xác thực. Hậu điều kiện thành công: Nhận event trong 2 giây ở ít nhất 95% mẫu.'
+    x-api-id: API-26
+    x-uc: UC-13.2
+    x-roles:
+    - CUSTOMER
+    - DRIVER
+    x-fr:
+    - FR-09
+    - FR-15
+    - FR-18
+    - FR-21
+    x-dec:
+    - DEC-10
+    - DEC-37
+    x-brule:
+    - BRULE-11
+    - BRULE-12
+    x-idempotency: event-id
+    x-rate-limit: 100/min/user
+    security:
+    - bearerAuth: []
+    parameters:
+    - $ref: ../_common/parameters.yaml#/LastEventId
+    responses:
+      '200':
+        description: Nhận event trong 2 giây ở ít nhất 95% mẫu
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../_common/schemas.yaml#/SSE
+            example: 'id: 550e8400-e29b-41d4-a716-446655440000
+
+              event: TripStatusChanged
+
+              data: {"tripId":"550e8400-e29b-41d4-a716-446655440001","status":"IN_PROGRESS"}
+
+
+              '
+      '401':
+        $ref: ../_common/errors.yaml#/Unauthorized
+      '429':
+        $ref: ../_common/errors.yaml#/TooManyRequests

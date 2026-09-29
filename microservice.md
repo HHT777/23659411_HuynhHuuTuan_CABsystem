@@ -615,3 +615,361 @@ Mọi query parameterized; DB role chỉ có quyền `cab_ride_db`. Dữ liệu 
 | IN_PROGRESS | Trip đang di chuyển. | Location hợp lệ được cộng distance. |
 | COMPLETED | Trip hoàn tất. | Phát TripCompleted cho Billing. |
 | CANCELLED | Tên chuẩn SRS cho đã hủy. | Alias phiếu: CANCELED. |
+
+### BC-03 — Billing → `billing-service`
+
+#### Bước 1. Tóm tắt xác định và phân rã
+
+BC-03 sở hữu cả PriceVersion/Fare và Payment để không có Payment trước Fare hợp lệ, đồng thời giữ invariant một Payment/Trip và tối đa một PaymentAttempt SUCCEEDED. Pricing có thể tách khi có nhiều sản phẩm giá; pilot giữ chung.
+
+#### Bước 2. Business Design
+
+| Nhóm | Mã sở hữu | Hệ quả thiết kế |
+| --- | --- | --- |
+| FR | FR-23–27, FR-40, FR-44, FR-54 | Quote, fare cuối, review, tiền mặt/sandbox và callback dedupe. |
+| UC | UC-11, 11.2, 12.1–12.4, 16.4 | Tính/chốt Fare, thanh toán, đối soát và PriceVersion. |
+| DEC/NFR | DEC-06–08, 22, 23, 27, 28; NFR-02, 08, 14 | Công thức giá, thiếu distance phải review, callback HMAC, UNKNOWN/retry. |
+| Phiếu chấm | #19, #24–27, #29–30 | Thanh toán online/callback, mã hóa, injection/XSS/JWT/rate/replay. |
+
+Mục tiêu: báo giá trước đặt; nhận `TripCompleted` để tạo Fare; chỉ cho thanh toán khi Fare FINALIZED; không sửa Payment từ Operations.
+
+```mermaid
+stateDiagram-v2
+  state Fare {
+    [*] --> PENDING
+    PENDING --> FINALIZED: distance hợp lệ
+    PENDING --> FARE_REVIEW_REQUIRED: <2 điểm hợp lệ
+    FARE_REVIEW_REQUIRED --> FINALIZED: OPERATOR verify distance
+  }
+  state Payment {
+    [*] --> UNPAID
+    UNPAID --> PENDING: create sandbox attempt
+    PENDING --> SUCCEEDED: valid callback/cash confirm
+    PENDING --> FAILED: final failure
+    PENDING --> UNKNOWN: timeout
+    FAILED --> PENDING: retry, tối đa 2
+    UNKNOWN --> SUCCEEDED: reconciliation
+    UNKNOWN --> FAILED: reconciliation
+  }
+```
+
+#### Bước 3. Microservice
+
+- Service/database/container/port: `billing-service` / `cab_billing_db` / `billing-service` / 8083; health `/health`, readiness `/ready`.
+- API sở hữu: API-18–API-23.
+- Aggregate root: PriceVersion, Fare, Payment; PaymentAttempt là entity trong Payment aggregate.
+- Phát: `FareFinalized`, `FareReviewRequired`, `PaymentStatusChanged`, `AuditRecorded`.
+- Tiêu thụ: `RideRequested` để giữ quote/version, `TripCompleted` để chốt Fare.
+- REST: Ride gọi estimate; Operations gọi Fare review. Callback API-23 không JWT, bắt buộc `X-Signature: sha256=<64 hex>` theo SRS §12.1.2.
+
+#### Bước 4. Mô hình dữ liệu logic
+
+| Entity | ENT | Vai trò | Mô tả |
+| --- | --- | --- | --- |
+| Fare | ENT-08 | aggregate root | Cước duy nhất của Trip. |
+| Payment | ENT-09 | aggregate root | Kết quả thanh toán duy nhất của Trip. |
+| PaymentAttempt | ENT-14 | entity | Một lần thử sandbox của Payment. |
+| PriceVersion | ENT-16 | aggregate root | Phiên bản biểu giá bất biến theo lịch sử. |
+
+| Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| --- | --- | --- | --- | --- |
+| Fare.id / tripId / priceVersionId | id / id / id | Y/Y/Y | id,tripId | tripId `ref → BC-02`. |
+| Fare.distanceMeters / distanceSource / amountVnd | số nguyên / enum / tiền | N/N/N | N | amount null khi review. |
+| Fare.status / version | enum / số nguyên | Y/Y | N | PENDING/FARE_REVIEW_REQUIRED/FINALIZED. |
+| Payment.id / tripId / method / status / paidAt / version | id / id / enum / enum / thời điểm / số nguyên | Y/Y/Y/Y/N/Y | id,tripId | UNPAID→PENDING→SUCCEEDED/FAILED/UNKNOWN. |
+| PaymentAttempt.id / paymentId / scenario / providerRef / status | id / id / enum / text(100) / enum | Y/Y/Y/N/Y | id,providerRef nếu có | scenario theo DEC-27. |
+| PriceVersion.id / vehicleTypeId / baseFareVnd / includedMeters / perKmVnd / effectiveAt / status | id / id / tiền / số nguyên / tiền / thời điểm / enum | Y | id | vehicleTypeId ref BC-01; DRAFT→ACTIVE→RETIRED. |
+
+Quan hệ: PriceVersion 1–N Fare; Fare 1–1 Trip logic; Trip logic 1–1 Payment; Payment 1–N PaymentAttempt. Invariant: PriceVersion của request không đổi; Fare FINALIZED bất biến; PENDING/UNKNOWN chặn attempt/phương thức mới; callback trùng không thu đôi; chỉ retry sau FAILED, tối đa hai lần.
+
+```mermaid
+erDiagram
+  PriceVersion ||--o{ Fare : prices
+  Fare ||--o| Payment : enables
+  Payment ||--o{ PaymentAttempt : attempts
+```
+
+#### Bước 5. CSDL
+
+##### 5.1. Chọn loại CSDL
+
+Engine chính **PostgreSQL 16**, `cab_billing_db`; Redis giữ idempotency/callback lock ngắn. Tiền, unique 1–1, version và callback cạnh tranh cần ACID/audit. MongoDB không đem lại lợi ích cho schema ổn định; Redis không là ledger bền vững. Không service khác truy cập database này.
+
+##### 5.2. Mô hình vật lý
+
+`price_versions`, `fares`, `payments`, `payment_attempts`, `idempotency_records`, `provider_events`, `outbox_events`. Unique `fares.trip_id`, `payments.trip_id`, `payment_attempts.provider_ref`; index `(payment_id,status)` và `(status,effective_at)`.
+
+```sql
+CREATE TABLE fares (
+  id uuid PRIMARY KEY,
+  trip_id uuid NOT NULL UNIQUE,
+  price_version_id uuid NOT NULL REFERENCES price_versions(id),
+  distance_meters integer CHECK (distance_meters >= 0),
+  distance_source varchar(32),
+  amount_vnd bigint CHECK (amount_vnd >= 0),
+  status varchar(24) NOT NULL CHECK (status IN ('PENDING','FARE_REVIEW_REQUIRED','FINALIZED')),
+  version integer NOT NULL CHECK (version > 0)
+);
+CREATE TABLE payments (
+  id uuid PRIMARY KEY,
+  trip_id uuid NOT NULL UNIQUE,
+  method varchar(12) NOT NULL CHECK (method IN ('CASH','SANDBOX')),
+  status varchar(12) NOT NULL CHECK (status IN ('UNPAID','PENDING','SUCCEEDED','FAILED','UNKNOWN')),
+  paid_at timestamptz,
+  version integer NOT NULL CHECK (version > 0)
+);
+CREATE TABLE payment_attempts (
+  id uuid PRIMARY KEY,
+  payment_id uuid NOT NULL REFERENCES payments(id),
+  scenario varchar(32) NOT NULL,
+  provider_ref varchar(100) UNIQUE,
+  status varchar(12) NOT NULL
+);
+```
+
+| Redis key | Kiểu | TTL | Mục đích |
+| --- | --- | --- | --- |
+| `idem:{subjectId}:{key}` | HASH | 24 giờ | Payment/review/cash idempotency. |
+| `provider:event:{providerEventId}` | STRING | 24 giờ, sau đó bản bền vững vẫn giữ | Fast dedupe callback. |
+| `payment:lock:{paymentId}` | STRING NX | 10 giây | Serialize callback/confirm cạnh tranh. |
+
+Fare demo: MOTORBIKE 2.001 m → `10.000 + 1/1000×4.000 = 10.004`, làm tròn 11.000 VND; CAR_4_SEAT tương ứng 26.000 VND. Query dùng parameter binding; DB role riêng. CAB không lưu số thẻ/CVV/token provider. Callback secret ở secret store, không DB; log chỉ providerRef đã mask.
+
+| Entity logic | Ánh xạ vật lý |
+| --- | --- |
+| PriceVersion | `price_versions` |
+| Fare | `fares` |
+| Payment | `payments` |
+| PaymentAttempt | `payment_attempts`, `provider_events` |
+
+#### Bước 6. Ubiquitous Language
+
+| Thuật ngữ | Định nghĩa | Ghi chú/Ví dụ |
+| --- | --- | --- |
+| PriceVersion | Biểu giá có hiệu lực tại lúc đặt. | Chuyến cũ không đổi khi kích hoạt giá mới. |
+| FareEstimate | Giá Haversine có nhãn ước tính. | Không phải Fare cuối. |
+| Fare | Cước cuối của Trip. | FINALIZED hoặc FARE_REVIEW_REQUIRED. |
+| Payment | Trạng thái thanh toán 1–1 Trip. | Phiếu gọi COMPLETED; chuẩn SRS là SUCCEEDED. |
+| PaymentAttempt | Một lần gọi mock provider. | PENDING/UNKNOWN chặn attempt mới. |
+| CASH | Phương thức tiền mặt. | Driver xác nhận sau Trip COMPLETED. |
+| SANDBOX | Phương thức điện tử thử nghiệm. | Scenario SUCCESS/FAIL/TIMEOUT/DUPLICATE. |
+| UNKNOWN | Chưa biết kết quả cuối. | Phải reconciliation, không tự retry/cash. |
+
+### BC-04 — Notification → `notification-service`
+
+#### Bước 1. Tóm tắt xác định và phân rã
+
+BC-04 biến domain event thành inbox và SSE. Inbox là nguồn, SSE chỉ kênh hiển thị; vì cùng dedupe/checkpoint nên không tách thêm service.
+
+#### Bước 2. Business Design
+
+| Nhóm | Mã sở hữu | Hệ quả thiết kế |
+| --- | --- | --- |
+| FR | FR-41, FR-56 | Ghi thông báo hủy/thay đổi và retry 1/5/25 giây. |
+| UC | UC-13.1–13.3 | Consume event, stream SSE, đọc/đánh dấu inbox. |
+| DEC/NFR | DEC-10, 37; NFR-02, 12, 17 | Lỗi Notification không rollback; 100 SSE, ≥95% ≤2 giây, DLQ. |
+| Phiếu chấm | #16, #18, #22 | Driver/customer nhận offer, hủy và kết quả duyệt. |
+
+```mermaid
+flowchart LR
+  Q[RabbitMQ event] --> D{eventId + recipientId đã có?}
+  D -->|Có| A[Ack]
+  D -->|Không| N[Create Notification]
+  N --> S[Publish SSE nếu client online]
+  S --> A
+  N -->|lỗi| R[Retry 1s, 5s, 25s]
+  R -->|vẫn lỗi| X[DLQ + log]
+```
+
+#### Bước 3. Microservice
+
+- Service/database/container/port: `notification-service` / `cab_notification_db` / `notification-service` / 8084; `/health`, `/ready`.
+- API sở hữu: API-24–API-26.
+- Aggregate root: Notification.
+- Phát: `NotificationRead`, delivery metric; tiêu thụ Ride/Billing/Identity domain events.
+- Không gọi đồng bộ service nguồn; SSE payload chứa resource ID để client GET owner API xác nhận.
+- CUSTOMER/DRIVER chỉ đọc recipientId bằng JWT `sub`.
+
+#### Bước 4. Mô hình dữ liệu logic
+
+| Entity | ENT | Vai trò | Mô tả |
+| --- | --- | --- | --- |
+| Notification | ENT-10 | aggregate root | Inbox idempotent theo recipientId+eventId. |
+
+| Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| --- | --- | --- | --- | --- |
+| id | id | Y | Y | ID thông báo. |
+| recipientId | id | Y | cặp với eventId | `ref → BC-01`; actor sở hữu. |
+| eventId | id | Y | cặp với recipientId | Dedupe at-least-once. |
+| type | text(64) | Y | N | Loại domain event cho client. |
+| readAt | thời điểm | N | N | null=CREATED, có giá trị=READ. |
+
+Quan hệ logic: một recipient có nhiều Notification; event có tối đa một Notification/recipient. Invariant: chỉ CREATED→READ, không unread; lỗi ghi/SSE không đảo giao dịch nguồn; Last-Event-ID chỉ checkpoint delivery, không thay đổi nghiệp vụ.
+
+```mermaid
+erDiagram
+  RecipientRef ||--o{ Notification : receives
+  EventRef ||--o{ Notification : materializes
+```
+
+#### Bước 5. CSDL
+
+##### 5.1. Chọn loại CSDL
+
+Engine chính **MongoDB 7**, database `cab_notification_db`; Redis giữ SSE connection/checkpoint ngắn hạn. Inbox đọc nhiều theo recipient, payload từng event có thể mở rộng và không có quan hệ giao dịch phức tạp, phù hợp document. PostgreSQL vẫn làm được nhưng migration payload event kém linh hoạt; Redis không được dùng làm nguồn inbox vì reconnect cần dữ liệu bền vững.
+
+##### 5.2. Mô hình vật lý
+
+Collection `notifications` có unique compound index `{recipientId:1,eventId:1}`, inbox index `{recipientId:1,createdAt:-1,_id:-1}`. Cursor là `(createdAt,id)`, `size≤100`. Không TTL bản ghi inbox trong pilot vì retention production chưa chốt.
+
+```json
+{
+  "_id": "550e8400-e29b-41d4-a716-446655440000",
+  "recipientId": "550e8400-e29b-41d4-a716-446655440002",
+  "eventId": "550e8400-e29b-41d4-a716-446655440003",
+  "type": "RideOfferCreated",
+  "resource": {"rideOfferId":"550e8400-e29b-41d4-a716-446655440004","expiresAt":"2026-09-29T09:15:20+07:00"},
+  "createdAt": "2026-09-29T09:15:00+07:00",
+  "readAt": null
+}
+```
+
+| Redis key | Kiểu | TTL | Mục đích |
+| --- | --- | --- | --- |
+| `sse:connection:{userId}:{connectionId}` | HASH | 60 giây heartbeat | Connection registry. |
+| `sse:last:{userId}` | STRING | 24 giờ | Last delivered event hint; DB vẫn là nguồn. |
+
+Mongo query dùng driver binding, allow-list sort/filter; không dựng `$where` từ input. Nội dung event lưu nguyên văn JSON an toàn, response `application/json`/`text/event-stream`; web client escape text, CSP chặn inline script.
+
+| Entity logic | Ánh xạ vật lý |
+| --- | --- |
+| Notification | collection `notifications`; Redis chỉ connection/checkpoint |
+
+#### Bước 6. Ubiquitous Language
+
+| Thuật ngữ | Định nghĩa | Ghi chú/Ví dụ |
+| --- | --- | --- |
+| Notification | Bản ghi inbox bền vững. | Nguồn theo DEC-10, không phải SSE packet. |
+| Recipient | User nhận thông báo. | recipientId từ JWT sub. |
+| CREATED | Thông báo chưa đọc. | readAt null. |
+| READ | Thông báo đã đọc. | API-25 chỉ chuyển một chiều. |
+| SSE Event | Bản trình chiếu realtime của Notification. | `id/event/data`, reconnect bằng Last-Event-ID. |
+| Dead-letter | Event không xử lý được sau ba lần retry. | Phải log và có thao tác replay. |
+
+### BC-05 — Operations & Reporting → `operations-reporting-service`
+
+#### Bước 1. Tóm tắt xác định và phân rã
+
+BC-05 sở hữu Incident/Audit và read projection. Reporting có thể tách khi tải phân tích tăng; pilot giữ chung vì cả hai consume cùng event, không sửa aggregate nguồn và phục vụ cùng nhóm vận hành.
+
+#### Bước 2. Business Design
+
+| Nhóm | Mã sở hữu | Hệ quả thiết kế |
+| --- | --- | --- |
+| FR | FR-31–38, FR-42, FR-46, FR-52, FR-55 | Quyền vận hành, incident/audit, active trip projection và báo cáo. |
+| UC | UC-16.1, 16.7, 17.1–17.3, 18.1–18.2 | Tra cứu, phát hiện/xử lý sự cố, báo cáo. |
+| DEC/NFR | DEC-01, 11, 12, 14, 15, 21, 31, 32; NFR-08, 09, 13, 15 | DB riêng, outbox/audit, timezone/formula, incident treo, backup. |
+| Phiếu chấm | #3–8, #11–13, #22, #24–30 | Accountable health contract, giám sát, audit và bằng chứng bảo mật. |
+
+```mermaid
+stateDiagram-v2
+  [*] --> OPEN: actor report or system threshold exceeded
+  OPEN --> IN_PROGRESS: OPERATOR accepts
+  IN_PROGRESS --> RESOLVED: choose resolution
+  RESOLVED --> CLOSED: verify downstream result
+  IN_PROGRESS --> CLOSED: no domain change needed
+```
+
+#### Bước 3. Microservice
+
+- Service/database/container/port: `operations-reporting-service` / `cab_operations_db` / `operations-reporting-service` / 8085; `/health`, `/ready`.
+- API sở hữu: API-27–API-30; quản trị contract API-X01–X03, thực thi health ở Gateway.
+- Aggregate root: Incident, ReportProjection; AuditLog append-only.
+- Phát: `IncidentCreated`, `IncidentResolved`, `TerminateTripRequested`, `FareReviewRequested`, `AuditRecorded` của thao tác nội bộ.
+- Tiêu thụ: toàn bộ `AuditRecorded`, Ride/Billing events để dựng projection.
+- REST: gửi command có Idempotency-Key tới Ride/Billing; không cập nhật database của chúng.
+
+#### Bước 4. Mô hình dữ liệu logic
+
+| Entity | ENT | Vai trò | Mô tả |
+| --- | --- | --- | --- |
+| AuditRecord | ENT-12 | value event | Payload audit đã mask do service nguồn phát. |
+| AuditLog | ENT-17 | entity append-only | Bản ghi Operations nhận idempotent. |
+| Incident | ENT-18 | aggregate root | Sự cố actor hoặc hệ thống tạo. |
+| OutboxEvent | ENT-24 | entity kỹ thuật chuẩn | Contract outbox; instance cục bộ ở từng service. |
+| ReportProjection | ENT-28 | aggregate root/read model | Metric theo ngày và dimensions. |
+
+| Entity.Field | Kiểu logic | Bắt buộc | Duy nhất | Ràng buộc/nguồn |
+| --- | --- | --- | --- | --- |
+| AuditRecord.id / eventId / actorId / action / targetId / beforeAfter | id / id / id / text(80) / id / JSON | Y/Y/N/Y/Y/N | id,eventId | actorId ref BC-01; diff đã mask. |
+| AuditLog.id / auditRecordId / traceId / occurredAt | id / id / text(64) / thời điểm | Y | id,auditRecordId | Append-only. |
+| Incident.id / tripId / source / reason / status / resolution / version | id / id / enum / text(500) / enum / enum / số nguyên | Y/Y/Y/Y/Y/N/Y | id | tripId `ref → BC-02`; reason có thể nhạy cảm. |
+| OutboxEvent.id / aggregateId / eventType / payload / occurredAt / publishedAt | id / id / text(100) / JSON / thời điểm / thời điểm | Y/Y/Y/Y/Y/N | id | Append cùng transaction aggregate. |
+| ReportProjection.metricDate / dimensions / metrics / sourceEventId | ngày / JSON / JSON / id | Y | sourceEventId | Timezone Asia/Ho_Chi_Minh; rebuild được. |
+
+Quan hệ: TripRef 1–N Incident; AuditRecord 1–1 AuditLog; source Event 1–N projection cell theo dimension. Invariant: một Incident SYSTEM cho mỗi trip/type/ngưỡng; đúng 30 phút chưa tạo, 30:00.001 mới tạo; resolution không sửa Payment; consumer audit/projection idempotent.
+
+```mermaid
+erDiagram
+  TripRef ||--o{ Incident : has
+  AuditRecord ||--|| AuditLog : materializes
+  SourceEventRef ||--o{ ReportProjection : updates
+```
+
+#### Bước 5. CSDL
+
+##### 5.1. Chọn loại CSDL
+
+Engine chính **PostgreSQL 16**, `cab_operations_db`; không cần Redis cho nguồn nghiệp vụ, có thể dùng cache báo cáo ngắn hạn nhưng mặc định không dùng. Incident version/audit unique cần ACID; JSONB cho dimensions/metrics đủ linh hoạt. MongoDB thuận tiện projection nhưng làm yếu transaction Incident/audit; Redis không bền và không phù hợp backup hằng ngày.
+
+##### 5.2. Mô hình vật lý
+
+`incidents`, `audit_logs`, `report_projections`, `active_trip_projections`, `processed_events`, `outbox_events`. Unique `(trip_id,source,reason_code)` cho incident hệ thống; unique `audit_record_id`, `source_event_id`; index `(status,created_at)`, GIN dimensions, `(metric_date)`.
+
+```sql
+CREATE TABLE incidents (
+  id uuid PRIMARY KEY,
+  trip_id uuid NOT NULL,
+  source varchar(12) NOT NULL CHECK (source IN ('CUSTOMER','DRIVER','OPERATOR','SYSTEM')),
+  reason varchar(500) NOT NULL,
+  status varchar(16) NOT NULL CHECK (status IN ('OPEN','IN_PROGRESS','RESOLVED','CLOSED')),
+  resolution varchar(24),
+  version integer NOT NULL CHECK (version > 0)
+);
+CREATE TABLE audit_logs (
+  id uuid PRIMARY KEY,
+  audit_record_id uuid NOT NULL UNIQUE,
+  trace_id varchar(64) NOT NULL,
+  occurred_at timestamptz NOT NULL,
+  masked_record jsonb NOT NULL
+);
+CREATE TABLE report_projections (
+  metric_date date NOT NULL,
+  dimensions jsonb NOT NULL,
+  metrics jsonb NOT NULL,
+  source_event_id uuid NOT NULL UNIQUE
+);
+```
+
+Reason/beforeAfter có thể chứa dữ liệu cá nhân: validate/mask tại nguồn, trường cần đọc lại mã hóa AES-256-GCM với keyVersion; không ghi token/phone đầy đủ. Query báo cáo dùng binding, allow-list `groupBy`, kỳ tối đa 366 ngày; DB role read/write đúng schema này.
+
+| Entity logic | Ánh xạ vật lý |
+| --- | --- |
+| Incident | `incidents` |
+| AuditRecord/AuditLog | payload event → `audit_logs` |
+| OutboxEvent | `outbox_events` cục bộ trong từng database; contract do BC-05 quản trị |
+| ReportProjection | `report_projections`, `active_trip_projections`, `processed_events` |
+
+#### Bước 6. Ubiquitous Language
+
+| Thuật ngữ | Định nghĩa | Ghi chú/Ví dụ |
+| --- | --- | --- |
+| Incident | Hồ sơ xử lý sự cố Trip. | OPEN→IN_PROGRESS→RESOLVED→CLOSED. |
+| SYSTEM Incident | Sự cố do scheduler phát hiện. | ASSIGNED quá 30 phút chỉ tạo một bản. |
+| Resolution | Kết quả xử lý. | CONTINUE_TRIP/CANCEL_TRIP/TERMINATE_TRIP/FARE_REVIEW. |
+| AuditRecord | Event audit đã mask từ owner. | Không ghi trực tiếp database Operations. |
+| AuditLog | Bản lưu append-only của AuditRecord. | Dedupe bằng auditRecordId. |
+| ReportProjection | Read model được dựng từ event. | Rebuild được; có asOf. |
+| Revenue | Tổng Fare của Trip hoàn thành đã thanh toán. | Theo paidAt, Asia/Ho_Chi_Minh. |
+| Acceptance Rate | ACCEPTED/(ACCEPTED+DECLINED+EXPIRED). | Không tính CANCELLED; mẫu số 0 trả null. |
+| Find-driver Rate | ASSIGNED/(ASSIGNED+NO_DRIVER_FOUND). | Khác completion rate. |

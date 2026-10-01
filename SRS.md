@@ -1,4 +1,6 @@
-# CAB System — Software Requirements Specification
+# SOFTWARE REQUIREMENTS SPECIFICATION
+
+# CAB SYSTEM
 
 ## Mục lục
 
@@ -22,7 +24,7 @@
 - [18. Quy tắc quyền và dữ liệu](#section-18)
 - [19. Lịch sử thay đổi](#section-19)
 
-Phiên bản 3.4 · 01/10/2026 · Hoàn thiện các lệch còn lại trong audit1.md: enum Driver, registrationToken, tariff snapshot, timeout, XSS, event catalog, Booking/Trip, PC24 và Compose init.
+Phiên bản: 3.6 (01/10/2026) · Chuẩn hóa trình bày Actor theo năng lực của từng actor và tách Scope thành chức năng hệ thống/ngoài hệ thống; giữ nguyên nội dung nghiệp vụ và tên UC-01 đã làm rõ.
 
 <a id="section-1"></a>
 
@@ -50,18 +52,90 @@ Xác định yêu cầu theo Actor → UC → FR → BR/BRULE, và truy vết đ
 
 # 3. Actors
 
-| Actor | Phạm vi | UC |
-| --- | --- | --- |
-| Customer | P1 | UC-02/03/04/05/09–12/15–17/19 |
-| Driver | P1 | UC-03/05–08/13–15/19 |
-| Admin | P1 duyệt hồ sơ; account/role (P2) | UC-03/07; đọc đúng ma trận |
-| Operator/Employee (P2) | Vận hành qua `backoffice-service` (P2) | UC-20 (P2) |
-| Executive/Board (P2) | Báo cáo qua `backoffice-service` (P2) | UC-21 (P2) |
-| Payment Provider | Hệ thống ngoài qua adapter | UC-17/18 |
-| Map Provider | Hệ thống ngoài qua adapter | UC-10; tính Fare trong UC-13 |
-| SMS/Notification Provider | Ngoài hệ thống; adapter OTP/delivery | UC-06/19 |
+## 3.1 Customer
 
-Service, scheduler và Kafka không phải actor người dùng. Một user có đúng một role. Gateway xác minh token và owner kiểm quyền tài nguyên.
+Customer là người đặt xe và sử dụng dịch vụ. Customer có thể:
+
+- Đăng ký và đăng nhập.
+- Xem thông tin hồ sơ của mình.
+- Tìm tài xế gần vị trí đón.
+- Ước tính giá và tạo yêu cầu đặt xe.
+- Xem các Booking của mình và theo dõi Trip.
+- Hủy yêu cầu đặt xe hoặc chuyến theo quy tắc.
+- Thanh toán online sau khi Trip hoàn thành.
+- Đánh giá chuyến đi.
+- Xem và đánh dấu đã đọc thông báo của mình.
+
+## 3.2 Driver
+
+Driver là người nhận và thực hiện chuyến xe. Driver có thể:
+
+- Đăng ký bằng OTP và gửi hồ sơ cá nhân, giấy phép lái xe, phương tiện.
+- Đăng nhập bằng Account đã được tạo và kích hoạt.
+- Xem thông tin hồ sơ của mình.
+- Chờ Admin duyệt hồ sơ.
+- Cập nhật trạng thái nhận chuyến và vị trí.
+- Xem, chấp nhận hoặc từ chối offer.
+- Cập nhật trạng thái Trip được phân công.
+- Hủy chuyến theo quy tắc.
+- Xem thông báo của mình.
+
+## 3.3 Admin
+
+Admin là người quản trị và kiểm soát nghiệp vụ quản lý tài xế. Admin có thể:
+
+- Đăng nhập bằng Account có quyền phù hợp.
+- Xem danh sách và chi tiết hồ sơ Driver.
+- Duyệt hoặc từ chối hồ sơ Driver, kèm lý do khi từ chối.
+- Quản lý Account, role và permission trong phạm vi P2.
+- Thực hiện các thao tác được Gateway cho phép theo ma trận quyền.
+
+## 3.4 Operator/Employee
+
+Operator/Employee là nhóm người dùng nội bộ phục vụ vận hành, thuộc phạm vi P2. Nhóm này có thể:
+
+- Tra cứu chuyến và theo dõi hoạt động vận hành.
+- Hỗ trợ xử lý Booking, Trip và Driver.
+- Xử lý Incident và đối soát giao dịch thanh toán khi chức năng P2 được triển khai.
+
+## 3.5 Executive/Board
+
+Executive/Board là nhóm người dùng chỉ đọc, thuộc phạm vi P2. Nhóm này có thể:
+
+- Xem Dashboard và báo cáo quản trị.
+- Theo dõi Booking, Trip, doanh thu, tỷ lệ hoàn thành và tỷ lệ hủy.
+- Xem hiệu quả vận hành theo thời gian, khu vực và hiệu suất Driver.
+
+## 3.6 Payment Provider
+
+Payment Provider là hệ thống bên ngoài, giao tiếp qua payment adapter. Payment Provider có thể:
+
+- Xử lý giao dịch thanh toán trực tuyến.
+- Trả kết quả giao dịch.
+- Gửi callback về hệ thống.
+
+Hệ thống phải xác thực callback, chống callback trùng và không để client tự xác nhận thanh toán thành công.
+
+## 3.7 Map Provider
+
+Map Provider là dịch vụ bản đồ bên ngoài, được gọi qua adapter. Map Provider cung cấp:
+
+- Geocoding và reverse geocoding.
+- Khoảng cách lộ trình.
+- Thời gian di chuyển dự kiến (ETA).
+
+## 3.8 SMS/Notification Provider
+
+SMS/Notification Provider là dịch vụ bên ngoài phục vụ việc gửi thông báo. Provider cung cấp:
+
+- Gửi mã OTP xác minh qua SMS.
+- Chuyển phát thông báo tới Customer và Driver khi có adapter tương ứng.
+
+## 3.9 Kafka và các thành phần hệ thống
+
+Kafka là event streaming backbone, không phải actor người dùng. Kafka hỗ trợ publish/subscribe sự kiện nghiệp vụ và phân phối thông báo bất đồng bộ giữa các microservice. Service, scheduler, database và Redis cũng là thành phần hệ thống, không tự đăng nhập hoặc thực hiện nghiệp vụ với tư cách người dùng.
+
+Một user có đúng một role. Gateway xác minh token; service sở hữu tài nguyên kiểm tra quyền owner và scope trước khi xử lý.
 
 <a id="section-4"></a>
 
@@ -82,12 +156,40 @@ Service, scheduler và Kafka không phải actor người dùng. Một user có 
 
 # 5. Scope
 
-| P1 bắt buộc | Ngoài P1 / P2 |
-| --- | --- |
-| Đăng ký/login Customer, OTP/hồ sơ/duyệt Driver | Quản lý account/role, refresh/logout (P2) |
-| nearby, Booking/offer/assignment/Trip/Fare/Review | Incident, Employee Operations (P2) |
-| Thanh toán online sau `COMPLETED`, callback/idempotency | payment_methods/customer_activity (P2) |
-| Kafka/outbox/inbox, Redis, bảo mật PC24–30 | Board dashboard/report và Audit Log (P2) |
+## 5.1 Chức năng hệ thống
+
+Hệ thống CAB bao gồm các chức năng chính sau:
+
+- Account, authentication và phân quyền theo role/scope.
+- Customer profile.
+- Driver profile, đăng ký Driver bằng OTP và quy trình duyệt hồ sơ.
+- Driver availability, trạng thái và location.
+- Tìm Driver gần vị trí đón.
+- Ước tính Fare, tạo Booking, Dispatch, Offer và Assignment.
+- Quản lý vòng đời Trip.
+- Thanh toán online sau khi Trip `COMPLETED`, callback và idempotency.
+- Review chuyến đi.
+- Notification qua Kafka, outbox/inbox và inbox của người nhận.
+- Redis cho GEO, TTL, rate limit và các cơ chế phối hợp đã nêu trong SRS.
+- Gateway routing, JWT, RBAC, rate limit, tracing và các yêu cầu bảo mật PC24–PC30.
+- Health/readiness và kiểm tra trạng thái các service P1, broker và dependency.
+- Tra cứu chuyến, vận hành, báo cáo và Audit Log trong phạm vi P2.
+
+P1 là phạm vi bắt buộc triển khai trong profile chính. P2 được mô tả để định hướng mở rộng và không làm phình Compose P1.
+
+## 5.2 Không thuộc hệ thống
+
+Các chức năng sau không thuộc phạm vi triển khai hiện tại hoặc không thuộc P1:
+
+- Quản lý account/role nâng cao, refresh token và logout thuộc P2.
+- Incident và Employee Operations đầy đủ thuộc P2.
+- `payment_methods` và `customer_activity` thuộc P2.
+- Dashboard, báo cáo Board và Audit Log thuộc P2.
+- Quản lý lương Driver, kế toán doanh nghiệp đầy đủ, quản lý kho/nhiên liệu và bảo dưỡng Vehicle chi tiết.
+- Dynamic pricing phức tạp, Loyalty/Membership/Subscription và Machine Learning dự đoán nhu cầu.
+- GPS history chi tiết không phục vụ trực tiếp nghiệp vụ.
+- Thu hoa hồng/phí nền tảng; số tiền Payment bằng đúng `Trip.fare`.
+- Payout cho Driver, hold/authorization và refund; Payment chỉ xử lý thanh toán của Customer cho Trip đã `COMPLETED`.
 
 <a id="section-6"></a>
 
@@ -176,31 +278,42 @@ stateDiagram-v2
 
 # 8. Use Cases
 
-| UC | Tên | Actor | Scope | FR | Workflow |
-| --- | --- | --- | --- | --- | --- |
-| UC-01 | Kiểm tra sức khỏe | Operator/Admin; không đăng nhập | P1 | FR-01 | 16.0 |
-| UC-02 | Đăng ký khách hàng | Customer | P1 | FR-02 | 6.1 |
-| UC-03 | Đăng nhập | Customer/Driver/Admin; Operator/Executive (P2) | P1 | FR-03 | 6.1 |
-| UC-04 | Xem thông tin khách | Customer(owner),Admin | P1 | FR-04 | 6.1 |
-| UC-05 | Xem thông tin tài xế | Driver(owner),Customer(public),Admin | P1 | FR-05 | 6.2 |
-| UC-06 | Đăng ký tài xế | Driver | P1 | FR-06,FR-07,FR-08 | 6.2 |
-| UC-07 | Duyệt tài xế | Admin | P1 | FR-09,FR-10 | 6.3 |
-| UC-08 | Cập nhật trạng thái và vị trí | Driver | P1 | FR-11,FR-12 | 6.4 |
-| UC-09 | Tìm tài xế gần | Customer,Admin | P1 | FR-13 | 6.4 |
-| UC-10 | Ước tính giá | Customer | P1 | FR-14 | 6.5 |
-| UC-11 | Đặt xe | Customer | P1 | FR-15,FR-16,FR-17 | 6.5 |
-| UC-12 | Xem Booking | Customer(owner),Admin | P1 | FR-17 | 6.5 |
-| UC-13 | Phản hồi offer | Driver | P1 | FR-18,FR-19,FR-20 | 6.6 |
-| UC-14 | Cập nhật chuyến | Driver(assigned) | P1 | FR-12,FR-20,FR-21 | 6.7 |
-| UC-15 | Hủy yêu cầu đặt xe | Customer/Driver | P1 | FR-22,FR-23 | 6.8 |
-| UC-16 | Đánh giá chuyến | Customer(owner) | P1 | FR-24,FR-25 | 6.9.3 |
-| UC-17 | Thanh toán online | Customer(owner) | P1 | FR-26,FR-27,FR-29 | 6.9.1 |
-| UC-18 | Xử lý callback | Payment Provider | P1 | FR-28 | 6.9.2 |
-| UC-19 | Xem thông báo | User(owner) | P1 | FR-30 | 6.9.4 |
-| UC-20 | Tra cứu chuyến | Operator/Admin (P2) | P2 | FR-31 | 6.9.4 |
-| UC-21 | Xem báo cáo | Executive/Admin (P2) | P2 | FR-32 | 6.9.4 |
+Use Case được dùng để mô tả một luồng sử dụng có ý nghĩa độc lập và có thể truy vết tới Functional Requirement (FR), workflow hoặc tiêu chí kiểm thử (PC). Các tiêu chí kỹ thuật như cấu trúc source, quản lý secret và giao tiếp nội bộ vẫn được ghi ở FR/NFR/kiến trúc; chúng chỉ được liên kết với UC-01 khi thuộc cùng luồng kiểm tra trạng thái hệ thống.
 
-### UC-01 Kiểm tra sức khỏe
+## 8.1 Use Cases trong phạm vi P1
+
+| UC | Actor | Use Case | FR liên quan | Workflow |
+| --- | --- | --- | --- | --- |
+| UC-01 | Người kiểm tra hệ thống; public | Kiểm tra trạng thái và khả năng sẵn sàng hệ thống | FR-01 | 16.0 |
+| UC-02 | Customer | Đăng ký khách hàng | FR-02 | 6.1 |
+| UC-03 | Customer/Driver/Admin; Operator/Executive (P2) | Đăng nhập | FR-03 | 6.1 |
+| UC-04 | Customer(owner), Admin | Xem thông tin khách | FR-04 | 6.1 |
+| UC-05 | Driver(owner), Customer(public), Admin | Xem thông tin tài xế | FR-05 | 6.2 |
+| UC-06 | Driver | Đăng ký tài xế | FR-06, FR-07, FR-08 | 6.2 |
+| UC-07 | Admin | Duyệt tài xế | FR-09, FR-10 | 6.3 |
+| UC-08 | Driver | Cập nhật trạng thái và vị trí | FR-11, FR-12 | 6.4 |
+| UC-09 | Customer, Admin | Tìm tài xế gần | FR-13 | 6.4 |
+| UC-10 | Customer | Ước tính giá | FR-14 | 6.5 |
+| UC-11 | Customer | Đặt xe | FR-15, FR-16, FR-17 | 6.5 |
+| UC-12 | Customer(owner), Admin | Xem Booking | FR-17 | 6.5 |
+| UC-13 | Driver | Phản hồi offer | FR-18, FR-19, FR-20 | 6.6 |
+| UC-14 | Driver(assigned) | Cập nhật chuyến | FR-12, FR-20, FR-21 | 6.7 |
+| UC-15 | Customer/Driver | Hủy yêu cầu đặt xe | FR-22, FR-23 | 6.8 |
+| UC-16 | Customer(owner) | Đánh giá chuyến | FR-24, FR-25 | 6.9.3 |
+| UC-17 | Customer(owner) | Thanh toán online | FR-26, FR-27, FR-29 | 6.9.1 |
+| UC-18 | Payment Provider | Xử lý callback | FR-28 | 6.9.2 |
+| UC-19 | User(owner) | Xem thông báo | FR-30 | 6.9.4 |
+
+## 8.2 Use Cases trong phạm vi P2
+
+| UC | Actor | Use Case | FR liên quan | Workflow |
+| --- | --- | --- | --- | --- |
+| UC-20 | Operator/Admin | Tra cứu chuyến | FR-31 | 6.9.4 |
+| UC-21 | Executive/Admin | Xem báo cáo | FR-32 | 6.9.4 |
+
+## 8.3 Đặc tả chi tiết Use Case
+
+### UC-01 — Kiểm tra trạng thái và khả năng sẵn sàng hệ thống
 
 **Actor:** Người kiểm tra hệ thống; endpoint public, không đăng nhập. **FR:** FR-01. **Phạm vi:** P1.
 
@@ -1375,6 +1488,8 @@ PC24 hash password là biện pháp thích hợp cho mật khẩu; dữ liệu �
 | 3.2 | 01/10/2026 | Sửa theo audit v3.2: SRS-01 trỏ source §10.1; SRS-02 chốt OFFER_TTL/RESERVATION_TTL/Kafka demo; SRS-03 thêm seed C3/D9/B7/T7 và bảng phân bổ fixture; SRS-04 viết lại PC29 (autocannon) và PC30 (kịch bản hai bước); SRS-05 thêm cột PASS-FAIL; SRS-06 kết quả cụ thể PC13/PC14; tạo .env/.env.example; cập nhật .gitignore; chuẩn hóa §2 Stakeholders theo chuẩn SE. |
 | 3.3 | 01/10/2026 | Hoàn thiện theo audit1.md (P0–P2): AUD-01 bổ sung đầy đủ credential đăng nhập cho D1–D9/C1–C3/A1 (userId, profileId, phone E.164, Account.status); AUD-02 chốt đồng bộ tariff qua tariff_snapshots và đóng C03; AUD-03 đóng C02 với cơ chế ký registrationToken chuẩn JWT HS256; AUD-04 phân tách nearby công khai không lọc LOCATION_MAX_AGE; AUD-05/06 chuẩn hóa phạm vi Idempotency-Key; AUD-08 bổ sung bảng Context Map & Subdomain; AUD-09 thêm ADR gom BC; AUD-10 phân tách DriverApplication vs DriverAvailability; AUD-11 cấu hình chuỗi timeout; AUD-12 loại bỏ INT-10; AUD-14 cải thiện UX hủy chuyến (cancelVia); AUD-15 thống nhất chính sách raw storage + contextual HTML escaping XSS; AUD-16 kịch bản PC30 4 bước; AUD-19 chuẩn hóa 12 container + 2 init; AUD-20 chuẩn hóa partition key Kafka; AUD-23 xử lý 409 khi offline lúc có offer; AUD-24 mô tả recovery workers; AUD-25 đồng bộ phiên bản v3.3. |
 | 3.4 | 01/10/2026 | Sửa các lệch audit1 còn sót: enum Driver, claims registrationToken, tariff snapshot, timeout, XSS, event catalog, thứ tự Booking/Trip, PC24 và 12 container + 2 init; chưa có backend nên PC vẫn PENDING. |
+| 3.5 | 01/10/2026 | Chuẩn hóa cách trình bày theo nhóm mục tiêu/stakeholder/actor/scope/workflow/state machine/use case; tách bảng UC P1 và P2; đổi tên UC-01 thành “Kiểm tra trạng thái và khả năng sẵn sàng hệ thống” để phân biệt rõ đây là luồng health/readiness kỹ thuật. |
+| 3.6 | 01/10/2026 | Viết lại mục Actors theo từng nhóm actor và năng lực sử dụng hệ thống, không còn bảng tham chiếu mã UC; tách Scope thành §5.1 Chức năng hệ thống và §5.2 Không thuộc hệ thống theo bố cục tham khảo. |
 
 **Không đổi:** nghiệp vụ đặt/nhận/thực hiện/hủy/đánh giá/thanh toán sau Trip và 30 tiêu chí. **Có đổi:** hợp đồng và quyết định thiết kế được prompt chốt mới; không tuyên bố giữ nguyên nội dung FR/UC.
 

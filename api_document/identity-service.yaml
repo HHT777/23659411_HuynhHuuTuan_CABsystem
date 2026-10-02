@@ -1,0 +1,515 @@
+# identity-service — OpenAPI contract (generated; nguồn: SRS.md v3.6, microservice_design.md v3.7)
+openapi: 3.0.3
+info:
+  title: CAB System — identity-service
+  version: 1.0.0
+  description: |-
+    API contract của **identity-service** — Account, Authentication, RBAC (BC01, PostgreSQL cab_identity_db). Chỉ Identity hash password (Argon2id) và ký access JWT RS256; kích hoạt/từ chối Account Driver từ event driver.application.decided.
+
+    Actor: PUBLIC (Customer đăng ký, mọi vai trò đăng nhập); internal caller: driver-service.
+
+    Nguồn duy nhất: `SRS.md` (v3.6) và `microservice_design.md` (v3.7). Mọi operation có `x-source`; chi tiết chưa xác định được đánh dấu `x-todo`. YAML này là contract để implement (docx: 1 service = 1 YAML).
+
+    Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
+servers:
+- url: http://localhost:{port}
+  description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
+  variables:
+    port:
+      default: '8000'
+- url: http://localhost:{port}
+  description: identity-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+  variables:
+    port:
+      default: '3000'
+tags:
+- name: Auth
+  description: Đăng ký Customer và đăng nhập (UC-02, UC-03)
+- name: Internal
+  description: Internal REST do identity-service cung cấp (INT-02)
+- name: Health
+  description: Liveness/readiness (NFR-01)
+x-kafka-events:
+  description: 'Hợp đồng Kafka (event-driven) của service — KHÔNG phải HTTP endpoint (docx §10). Nguồn: SRS §12.1–12.3, micro §7. Envelope: EventEnvelope. Outbox/inbox at-least-once, manual commit, retry 1/5/25s rồi vào cab.dead-letter.'
+  envelope:
+    $ref: '#/components/schemas/EventEnvelope'
+  produces: []
+  consumes:
+  - eventType: driver.application.decided
+    topic: driver.events
+    producer: driver-service
+    consumerGroup: identity-service.v1
+    payload:
+      $ref: '#/components/schemas/DriverApplicationDecidedPayload'
+    effect: Consume (inbox dedupe) → kích hoạt Account (ACTIVE) khi decision=APPROVE hoặc REJECTED khi REJECT; định danh Account bằng accountId. Driver phải login lại để lấy accountStatus=ACTIVE (SRS §6.3, §16.2.1).
+  producesNote: Không có event nghiệp vụ nào được catalog nguồn chốt cho service này; không tự tạo topic/event mới (micro §5.x.5).
+x-outgoing-internal-calls:
+- code: INT-01
+  target: customer-service
+  call: POST /internal/customers
+  when: Khi đăng ký Customer; lỗi profile → giữ operation để retry, không trả 201 (SRS §6.1).
+paths:
+  /auth/register:
+    post:
+      tags:
+      - Auth
+      operationId: registerCustomer
+      summary: Đăng ký Customer
+      description: Tạo Account CUSTOMER (ACTIVE) rồi gọi INT-01 tạo profile tại customer-service; chỉ trả 201 sau khi profile commit (FR-02, UC-02). Thiếu email/phone → 400; trùng → 409; profile chưa xong → không trả 201 (503 recoverable, micro §9.6.3). Public đăng ký chỉ tạo CUSTOMER hoặc DRIVER (BRULE-02); Driver đăng ký qua driver-service.
+      x-api-type: public
+      x-source: SRS.md §6.1, §8.3 UC-02, §9 FR-02, §16.2, §16.2.1; microservice_design.md §5.2.2, §6.1, §9.4.1, §9.6.3
+      x-roles:
+      - PUBLIC
+      x-grpc-rpc: cab.identity.v1.IdentityService/Register
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCustomerRequest'
+            example:
+              fullName: Nguyen Van A
+              email: newcustomer@cab.local
+              phone: '+84905555555'
+              password: Secret123
+      security: []
+      responses:
+        '201':
+          description: Account + profile sẵn sàng; đăng nhập được.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterCustomerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 409 — Email/phone đã tồn tại (UC-02) hoặc request cùng key đang xử lý (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 422 — Cùng Idempotency-Key nhưng body khác (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      operationId: login
+      summary: Đăng nhập (email hoặc phone)
+      description: Lookup blind index, so password hash, kiểm trạng thái Account rồi ký JWT RS256 (FR-03, UC-03). Driver PENDING_APPROVAL/REJECTED vẫn login được nhưng chỉ có scope hạn chế. Sai định dạng → 400; sai credentials → 401; SQL injection → 400/401, không cấp token (PC25). RATE_LOGIN 10/phút/IP → 429.
+      x-api-type: public
+      x-source: SRS.md §6.1, §8.3 UC-03, §9 FR-03, §16.2, §16.2.1, §16.1 RATE_LOGIN; microservice_design.md §5.2.2, §9.4.1
+      x-roles:
+      - PUBLIC
+      x-grpc-rpc: cab.identity.v1.IdentityService/Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              phone: '+84901111111'
+              password: <SEED_PASSWORD>
+      security: []
+      responses:
+        '200':
+          description: JWT được cấp theo trạng thái và scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /internal/accounts/drivers:
+    post:
+      tags:
+      - Internal
+      operationId: internalCreateDriverAccount
+      summary: '[INT-02] Tạo Account DRIVER'
+      description: driver-service gọi để tạo Account role=DRIVER, status=PENDING_APPROVAL theo registrationToken (HS256, REGISTRATION_TOKEN_KEY). Identity verify token (alg allowlist HS256, aud=identity-service), hash password, mã hóa email/phone, kiểm unique và registration jti (`registration_id` UNIQUE chống một token tạo hai account). Token replay với operation khác → 401.
+      x-api-type: internal
+      x-internal-contract: INT-02
+      x-allowed-callers:
+      - driver-service
+      x-source: SRS.md §6.2, §14.1 INT-02, §16.2.1; microservice_design.md §2.4 INT-02, §5.2.3, §6.2
+      x-roles:
+      - 'INTERNAL: driver-service'
+      x-todo: 'Chưa xác định trong SRS/microservice_design: status code replay hợp lệ (cùng operation) của INT-02 và mã lỗi khi trùng phone/email'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDriverAccountRequest'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: identity-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3000'
+      responses:
+        '201':
+          description: Account DRIVER tạo, chờ duyệt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateDriverAccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: 409 — Trùng phone/email/registration_id (unique).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /health:
+    get:
+      tags:
+      - Health
+      operationId: health
+      summary: Liveness
+      description: 'Liveness: process sống; không gọi DB/Kafka/Redis (SRS §16.2.1 ''Ràng buộc ghi, bảo mật và readiness''). Health nội bộ có credential (micro §9.5).'
+      x-api-type: health
+      x-source: SRS.md §16.0 NFR-01, §16.2.1; microservice_design.md §5.x.3, §9.5
+      x-roles:
+      - INTERNAL (X-Service-Token)
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response body của /health và /ready từng service không được tài liệu định nghĩa (chỉ /health/services của Gateway có schema {services,checkedAt})'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: identity-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3000'
+      responses:
+        '200':
+          description: Process còn sống.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /ready:
+    get:
+      tags:
+      - Health
+      operationId: ready
+      summary: Readiness
+      description: 'Readiness: kiểm DB riêng và Kafka (NFR-01). Dependency DOWN → 503 (UC-01 AC-01.2, NFR-01). Runtime phải chứng minh 503 rồi hồi phục 200 khi dependency lên lại (SRS §16.2.1).'
+      x-api-type: health
+      x-source: SRS.md §8.3 UC-01, §16.0 NFR-01, §16.2.1; microservice_design.md §9.5
+      x-roles:
+      - INTERNAL (X-Service-Token)
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response body của /health và /ready từng service không được tài liệu định nghĩa (chỉ /health/services của Gateway có schema {services,checkedAt})'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: identity-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3000'
+      responses:
+        '200':
+          description: Sẵn sàng.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  schemas:
+    CreateDriverAccountRequest:
+      type: object
+      description: Body INT-02. phone lấy từ registrationToken, không nhận từ client (micro §5.2.7).
+      required:
+      - registrationToken
+      - driverId
+      - password
+      properties:
+        registrationToken:
+          type: string
+          description: JWT HS256 do driver-service ký (claims cố định — SRS §6.2).
+        driverId:
+          type: string
+          format: uuid
+          description: driverId preallocate tại driver-service; Identity lưu thành users.profile_id (SRS §16.2.1).
+        password:
+          type: string
+          description: Plaintext password chỉ truyền transient; hash tại identity-service (SEC-01).
+          minLength: 6
+          format: password
+        email:
+          type: string
+          format: email
+          description: Email tùy chọn của Driver (BRULE-01).
+      x-todo: 'Chưa xác định trong SRS/microservice_design: danh sách field chính xác của body INT-02 (tài liệu chỉ ghi ''registrationToken, password'' và ''gửi driverId cùng registrationToken'')'
+    CreateDriverAccountResponse:
+      type: object
+      description: '201 {accountId: userId} (micro §6.2).'
+      required:
+      - accountId
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: users.id mới tạo
+    DriverApplicationDecidedPayload:
+      type: object
+      required:
+      - driverId
+      - accountId
+      - decision
+      properties:
+        driverId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+          description: users.id của Account — dùng cho Identity activation
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+        reason:
+          type: string
+          description: Lý do từ chối (khi REJECT)
+    ErrorResponse:
+      type: object
+      description: Error envelope chuẩn {error:{code,message},requestId} (SRS §16.2.1 'Lỗi').
+      required:
+      - error
+      - requestId
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              description: 'Mã lỗi nghiệp vụ. Các mã có căn cứ trong tài liệu: MISSING_IDEMPOTENCY_KEY, ACTIVE_OFFER_EXISTS, TRIP_ALREADY_CREATED, TARIFF_NOT_CONFIGURED. Các mã khác chưa được tài liệu liệt kê nên không đặt enum.'
+            message:
+              type: string
+              description: Mô tả lỗi; không chứa SQL/stack trace/token/giấy tờ (SEC-10).
+        requestId:
+          type: string
+          description: X-Request-Id/correlationId của request (NFR-02).
+    EventEnvelope:
+      type: object
+      description: Envelope Kafka (SRS §12.2; micro §7.3). Nếu ghi ở schema khác thì lấy SRS làm chuẩn.
+      required:
+      - eventId
+      - eventType
+      - version
+      - aggregateId
+      - aggregateVersion
+      - occurredAt
+      - producer
+      - correlationId
+      - payload
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          description: Dotted event name, vd trip.completed
+        version:
+          type: integer
+          description: Version schema của envelope/payload (không phải TTL/config)
+        aggregateId:
+          type: string
+          description: ID aggregate (vd tripId)
+        aggregateVersion:
+          type: integer
+          description: Version aggregate của owner producer
+        occurredAt:
+          type: string
+          format: date-time
+          description: UTC ISO-8601
+        producer:
+          type: string
+          description: Service producer, vd trip-service
+        correlationId:
+          type: string
+          description: requestId
+        payload:
+          type: object
+          description: Payload theo từng eventType; không chứa password/token/CCCD/phone plaintext.
+    LoginRequest:
+      type: object
+      description: Đúng một trong email hoặc phone cùng password; cả hai cùng có hoặc cùng thiếu → 400 (SRS §16.2.1). Driver đăng nhập bằng phone.
+      required:
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          description: E.164
+        password:
+          type: string
+          format: password
+      oneOf:
+      - required:
+        - email
+      - required:
+        - phone
+    LoginResponse:
+      type: object
+      description: Response POST /auth/login (SRS §16.2).
+      required:
+      - accessToken
+      - tokenType
+      - expiresIn
+      - role
+      - accountStatus
+      - scope
+      properties:
+        accessToken:
+          type: string
+          description: JWT RS256
+        tokenType:
+          type: string
+        expiresIn:
+          type: integer
+          description: 'Thời hạn token. Chưa xác định trong SRS/microservice_design: đơn vị của expiresIn (ACCESS_JWT_TTL = 60 phút)'
+        role:
+          type: string
+          enum:
+          - CUSTOMER
+          - DRIVER
+          - ADMIN
+          description: 'Một user đúng một role; P1: CUSTOMER/DRIVER/ADMIN (OPERATOR/EXECUTIVE thuộc P2 — BRULE-02).'
+        accountStatus:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - REJECTED
+          description: Account.status (SRS §7).
+        scope:
+          description: Scope của token. ACTIVE có scope theo role; Driver PENDING_APPROVAL/REJECTED chỉ driver.application.read và notifications.read (SRS §16.2.1).
+          oneOf:
+          - type: string
+          - type: array
+            items:
+              type: string
+          x-todo: 'Chưa xác định trong SRS/microservice_design: kiểu dữ liệu của scope (string phân tách bằng khoảng trắng hay array) và danh sách scope theo role ACTIVE'
+    RegisterCustomerRequest:
+      type: object
+      description: Body POST /auth/register (SRS §16.2). Không có role/profileId — client không được chọn (SRS §16.2.1).
+      required:
+      - fullName
+      - email
+      - phone
+      - password
+      properties:
+        fullName:
+          type: string
+          description: Họ tên; lưu raw, escape khi output (SEC-04).
+        email:
+          type: string
+          format: email
+          description: Email Customer (bắt buộc, duy nhất — BRULE-01).
+        phone:
+          type: string
+          description: Số điện thoại E.164, duy nhất (BRULE-01, SRS §16.2.1).
+        password:
+          type: string
+          description: Mật khẩu; tối thiểu 6 ký tự (PASSWORD_MIN_LENGTH).
+          minLength: 6
+          format: password
+    RegisterCustomerResponse:
+      type: object
+      required:
+      - customerId
+      - userId
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID = profileId do customer-service tạo
+        userId:
+          type: string
+          format: uuid
+          description: users.id (JWT.sub)
+  responses:
+    BadRequest:
+      description: 400 — Validation không hợp lệ, thiếu Idempotency-Key (MISSING_IDEMPOTENCY_KEY) hoặc client gửi trường không được phép (SRS §16.2 bảng mã HTTP).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 403 — Sai role, quyền sở hữu hoặc caller (SEC-06).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: 503 — Dependency unavailable; không suy diễn timeout = thất bại nghiệp vụ (SRS §16.2, NFR-07).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: 429 — Vượt rate limit tại Gateway; kèm Retry-After (SEC-07).
+      headers:
+        Retry-After:
+          description: Số giây đến thời điểm cửa sổ rate được mở lại (SRS §16.2.1).
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 401 — Token/credential/chữ ký/timestamp không hợp lệ; sửa sub/role hoặc alg=none (SEC-05).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Bắt buộc cho lệnh ghi quan trọng (SEC-08, SRS §16.2.1 'Phạm vi Idempotency-Key'). Thiếu → 400 MISSING_IDEMPOTENCY_KEY. Cùng key + cùng body → trả lại response cũ; cùng key nhưng body khác → 422; đang xử lý → 409 (BRULE-21). TTL 24 giờ (IDEMPOTENCY_TTL).
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 64
+  securitySchemes:
+    serviceToken:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+      description: 'Internal REST credential: JWT HS256 với claims iss (service gọi), aud (service nhận), iat, exp (TTL 60s), jti (SRS §14.1, micro §2.3). Thiếu/sai → 401; caller không nằm trong allowlist → 403. Chỉ tồn tại trên mạng cab-internal; Gateway trả 404 cho mọi /internal/** từ client.'

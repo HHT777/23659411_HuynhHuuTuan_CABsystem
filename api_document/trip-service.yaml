@@ -1,0 +1,1088 @@
+# trip-service — OpenAPI contract (generated; nguồn: SRS.md v3.6, microservice_design.md v3.7)
+openapi: 3.0.3
+info:
+  title: CAB System — trip-service
+  version: 1.0.0
+  description: |-
+    API contract của **trip-service** — Trip Operations + Fare + Feedback (BC06/BC08, PostgreSQL cab_trip_db; Redis cache vị trí): vòng đời Trip, tính/khóa Fare, Review, danh mục giá (price_versions).
+
+    Actor: CUSTOMER/DRIVER (owner), ADMIN; internal caller: booking-service, payment-service.
+
+    Nguồn duy nhất: `SRS.md` (v3.6) và `microservice_design.md` (v3.7). Mọi operation có `x-source`; chi tiết chưa xác định được đánh dấu `x-todo`. YAML này là contract để implement (docx: 1 service = 1 YAML).
+
+    Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
+servers:
+- url: http://localhost:{port}
+  description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
+  variables:
+    port:
+      default: '8000'
+- url: http://localhost:{port}
+  description: trip-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+  variables:
+    port:
+      default: '3004'
+tags:
+- name: Trip
+  description: Vòng đời Trip, hủy (UC-13/14/15)
+- name: Review
+  description: Đánh giá chuyến (UC-16)
+- name: Internal
+  description: Internal REST do trip-service cung cấp (INT-06/07/09)
+- name: Health
+  description: Liveness/readiness
+x-kafka-events:
+  description: 'Hợp đồng Kafka (event-driven) của service — KHÔNG phải HTTP endpoint (docx §10). Nguồn: SRS §12.1–12.3, micro §7. Envelope: EventEnvelope. Outbox/inbox at-least-once, manual commit, retry 1/5/25s rồi vào cab.dead-letter.'
+  envelope:
+    $ref: '#/components/schemas/EventEnvelope'
+  produces:
+  - eventType: trip.assigned
+    topic: trip.events
+    partitionKey: tripId
+    consumers:
+    - booking-service
+    - driver-service
+    - notification-service
+    payload:
+      $ref: '#/components/schemas/TripAssignedPayload'
+  - eventType: trip.status.changed
+    topic: trip.events
+    partitionKey: tripId
+    consumers:
+    - notification-service
+    payload:
+      $ref: '#/components/schemas/TripStatusChangedPayload'
+  - eventType: trip.completed
+    topic: trip.events
+    partitionKey: tripId
+    consumers:
+    - booking-service
+    - driver-service
+    - notification-service
+    payload:
+      $ref: '#/components/schemas/TripCompletedPayload'
+  - eventType: trip.canceled
+    topic: trip.events
+    partitionKey: tripId
+    consumers:
+    - booking-service
+    - driver-service
+    - notification-service
+    payload:
+      $ref: '#/components/schemas/TripCanceledPayload'
+  - eventType: trip.review.created
+    topic: trip.events
+    partitionKey: driverId
+    consumers:
+    - driver-service
+    payload:
+      $ref: '#/components/schemas/TripReviewCreatedPayload'
+  consumes:
+  - eventType: driver.location.updated
+    topic: driver.events
+    producer: driver-service
+    consumerGroup: trip-service.v1
+    payload:
+      $ref: '#/components/schemas/DriverLocationUpdatedPayload'
+    effect: Cập nhật vị trí Trip IN_PROGRESS (last_lat/lng) + cache Redis; chỉ áp event có recordedAt/version Driver mới hơn (SRS §6.7, BRULE-14).
+  - eventType: payment.completed
+    topic: payment.events
+    producer: payment-service
+    consumerGroup: trip-service.v1
+    payload:
+      $ref: '#/components/schemas/PaymentCompletedPayload'
+    effect: Ghi Trip.paymentStatus = PAID (UNPAID→PAID), không hạ trạng thái (SRS §6.9.2).
+x-outgoing-internal-calls:
+- code: INT-08
+  target: driver-service
+  call: POST /internal/drivers/{id}/reservations/{reservationId}/confirm
+  when: Khi xử lý INT-06 (confirm reservation trước khi tạo Trip).
+paths:
+  /trips/{id}:
+    get:
+      tags:
+      - Trip
+      operationId: getTrip
+      summary: Xem Trip
+      description: 'Snapshot tài xế, trạng thái, vị trí, fare, paymentStatus. Chỉ Customer/Driver liên quan (owner) hoặc ADMIN. Kafka lag: đọc owner để xác nhận (UC-14).'
+      x-api-type: public
+      x-source: SRS.md §8.3 UC-13/14, §9 FR-20, §16.2, §16.2.1; microservice_design.md §5.6.2
+      x-roles:
+      - CUSTOMER(owner)
+      - DRIVER(owner)
+      - ADMIN
+      x-grpc-rpc: cab.trip.v1.TripService/GetTrip
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Trip ID
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Trip.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /trips/{id}/status:
+    patch:
+      tags:
+      - Trip
+      operationId: updateTripStatus
+      summary: 'Driver: cập nhật trạng thái Trip'
+      description: ASSIGNED→ARRIVED→IN_PROGRESS→COMPLETED; transition + outbox nguyên tử (`trip.status.changed`, `trip.completed` kèm Fare). Nhảy bước → 409; Driver không được gán → 403. Tự idempotent theo trạng thái, KHÔNG cần Idempotency-Key.
+      x-api-type: public
+      x-source: SRS.md §6.7, §8.3 UC-14, §9 FR-21, §16.2, §16.2.1; microservice_design.md §5.6.2, §6.7
+      x-roles:
+      - DRIVER(assigned)
+      x-grpc-rpc: cab.trip.v1.TripService/UpdateTripStatus
+      x-todo: 'Chưa xác định trong SRS/microservice_design: body response 200 của PATCH status (SRS chỉ ghi ''200''); đang trả Trip'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Trip ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTripStatusRequest'
+            example:
+              status: ARRIVED
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Trip sau khi đổi trạng thái.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 409 — Sai thứ tự chuyển trạng thái.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /trips/{id}/cancel:
+    post:
+      tags:
+      - Trip
+      operationId: cancelTrip
+      summary: Hủy Trip
+      description: Customer chủ Trip hoặc Driver được gán hủy Trip `ASSIGNED`/`ARRIVED`; lưu CANCELED, canceledBy, reason; phát `trip.canceled`. Từ `IN_PROGRESS` trở đi → 409. Không tự điều phối lại; không có Payment cho Trip hủy.
+      x-api-type: public
+      x-source: SRS.md §6.8, §8.3 UC-15, §9 FR-23, §10 BRULE-15/16, §16.2; microservice_design.md §5.6.2, §6.8
+      x-roles:
+      - CUSTOMER(owner)
+      - DRIVER(owner)
+      x-grpc-rpc: cab.trip.v1.TripService/CancelTrip
+      x-todo: 'Chưa xác định trong SRS/microservice_design: body response 200 của cancel Trip (SRS chỉ ghi ''200 CANCELED''); đang trả Trip'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Trip ID
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelTripRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Trip CANCELED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 409 — Request cùng Idempotency-Key đang xử lý (IN_PROGRESS) hoặc xung đột nghiệp vụ (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 422 — Cùng Idempotency-Key nhưng body khác (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /trips/{id}/reviews:
+    post:
+      tags:
+      - Review
+      operationId: createReview
+      summary: 'Customer: đánh giá Trip'
+      description: 'Customer chủ Trip `COMPLETED` đánh giá một lần: stars 1–5, comment ≤500 (escape output). Phát `trip.review.created`. Stars ngoài biên → 400; trùng → 409.'
+      x-api-type: public
+      x-source: SRS.md §6.9.3, §8.3 UC-16, §9 FR-24, §10 BRULE-17, §16.2; microservice_design.md §5.6.2, §6.10
+      x-roles:
+      - CUSTOMER(owner)
+      x-grpc-rpc: cab.trip.v1.TripService/CreateReview
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Trip ID
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReviewRequest'
+            example:
+              stars: 5
+              comment: Tai xe than thien
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          description: Review gắn tripId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 409 — Request cùng Idempotency-Key đang xử lý (IN_PROGRESS) hoặc xung đột nghiệp vụ (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 422 — Cùng Idempotency-Key nhưng body khác (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /trips/{id}/review:
+    get:
+      tags:
+      - Review
+      operationId: getReview
+      summary: Xem Review của Trip
+      description: Theo quyền đọc Trip liên quan. Chưa có Review → 404.
+      x-api-type: public
+      x-source: SRS.md §9 FR-25, §16.2, §16.2.1; microservice_design.md §5.6.2
+      x-roles:
+      - CUSTOMER(owner)
+      - DRIVER(owner)
+      - ADMIN
+      x-grpc-rpc: cab.trip.v1.TripService/GetReview
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Trip ID
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /internal/trips:
+    post:
+      tags:
+      - Internal
+      operationId: internalCreateTrip
+      summary: '[INT-06] Tạo/phục hồi Trip'
+      description: booking-service gọi khi Driver accept. Trip tra idempotency/booking_id TRƯỚC confirm reservation (INT-08), tính & khóa Fare, tạo Trip ASSIGNED + `trip.assigned` trong một transaction. 201 lần đầu; replay cùng bookingId/commandKey trả response cũ; không tạo mới khi kết quả chưa rõ.
+      x-api-type: internal
+      x-internal-contract: INT-06
+      x-allowed-callers:
+      - booking-service
+      x-source: SRS.md §6.6, §14.1 INT-06; microservice_design.md §2.4 INT-06, §5.6.3, §6.6, §9.6.2
+      x-roles:
+      - 'INTERNAL: booking-service'
+      x-todo: 'Chưa xác định trong SRS/microservice_design: status code replay (tài liệu: ''replay response cũ'') và mã lỗi chi tiết'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTripInternalRequest'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: trip-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3004'
+      responses:
+        '201':
+          description: Trip tạo / response cũ khi replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTripInternalResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: 409 — Reservation sai/hết hạn (từ INT-08) hoặc xung đột Trip hoạt động.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /internal/customers/{id}/active-trip:
+    get:
+      tags:
+      - Internal
+      operationId: internalGetActiveTrip
+      summary: '[INT-07] Kiểm Trip hoạt động của Customer'
+      description: booking-service xác nhận Customer không có Trip hoạt động (ASSIGNED/ARRIVED/IN_PROGRESS) trước khi tạo Booking. Timeout/404 không chứng minh operation cũ không thể commit (micro §9.6.2).
+      x-api-type: internal
+      x-internal-contract: INT-07
+      x-allowed-callers:
+      - booking-service
+      x-source: SRS.md §14.1 INT-07; microservice_design.md §2.4 INT-07, §5.6.3, §9.6.2
+      x-roles:
+      - 'INTERNAL: booking-service'
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response INT-07: có Trip hoạt động → 200 + body? không có → 404 hay 200 rỗng?'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Customer ID (profileId)
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: trip-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3004'
+      responses:
+        '200':
+          description: Có Trip hoạt động.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveTrip'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: 404 — Không có Trip hoạt động (giả định, xem x-todo).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/trips/{id}/payable:
+    get:
+      tags:
+      - Internal
+      operationId: internalGetTripPayable
+      summary: '[INT-09] Thông tin thanh toán của Trip'
+      description: payment-service đọc customerId, status, fare (khóa), paymentStatus để tạo Payment; nguồn xác nhận số tiền (thay hoàn toàn INT-10). Payment đối chiếu customerId với JWT.profileId.
+      x-api-type: internal
+      x-internal-contract: INT-09
+      x-allowed-callers:
+      - payment-service
+      x-source: SRS.md §6.9.1, §14.1 INT-09; microservice_design.md §2.4 INT-09, §5.6.3, §6.9
+      x-roles:
+      - 'INTERNAL: payment-service'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Trip ID
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: trip-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3004'
+      responses:
+        '200':
+          description: Trip payable view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripPayable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /health:
+    get:
+      tags:
+      - Health
+      operationId: health
+      summary: Liveness
+      description: 'Liveness: process sống; không gọi DB/Kafka/Redis (SRS §16.2.1 ''Ràng buộc ghi, bảo mật và readiness''). Health nội bộ có credential (micro §9.5).'
+      x-api-type: health
+      x-source: SRS.md §16.0 NFR-01, §16.2.1; microservice_design.md §5.x.3, §9.5
+      x-roles:
+      - INTERNAL (X-Service-Token)
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response body của /health và /ready từng service không được tài liệu định nghĩa (chỉ /health/services của Gateway có schema {services,checkedAt})'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: trip-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3004'
+      responses:
+        '200':
+          description: Process còn sống.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /ready:
+    get:
+      tags:
+      - Health
+      operationId: ready
+      summary: Readiness
+      description: 'Readiness: kiểm DB riêng, Kafka và Redis (NFR-01). Dependency DOWN → 503 (UC-01 AC-01.2, NFR-01). Runtime phải chứng minh 503 rồi hồi phục 200 khi dependency lên lại (SRS §16.2.1).'
+      x-api-type: health
+      x-source: SRS.md §8.3 UC-01, §16.0 NFR-01, §16.2.1; microservice_design.md §9.5
+      x-roles:
+      - INTERNAL (X-Service-Token)
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response body của /health và /ready từng service không được tài liệu định nghĩa (chỉ /health/services của Gateway có schema {services,checkedAt})'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: trip-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3004'
+      responses:
+        '200':
+          description: Sẵn sàng.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  schemas:
+    ActiveTrip:
+      type: object
+      required:
+      - tripId
+      - status
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TripStatus'
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response INT-07 (tài liệu chỉ ghi ''Xác nhận không có Trip hoạt động'')'
+    CancelTripRequest:
+      type: object
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          description: Lý do (bắt buộc); tối đa COMMENT_REASON_MAX=500 ký tự (BRULE-16); escape HTML tại output.
+          minLength: 1
+          maxLength: 500
+    Coordinate:
+      type: object
+      description: Điểm đón/trả {lat,lng,address?} (SRS §16.2.1 DTO Tọa độ). Phải nằm trong SERVICE_AREA lat 10.35–11.20, lng 106.35–107.05 (SRS §16.1); ngoài vùng trả 422 (BRULE-08) nên KHÔNG đặt minimum/maximum trong schema để Swagger không đổi thành 400.
+      required:
+      - lat
+      - lng
+      properties:
+        lat:
+          type: number
+          description: Vĩ độ; số hữu hạn (không chuỗi/NaN).
+        lng:
+          type: number
+          description: Kinh độ; số hữu hạn (không chuỗi/NaN).
+        address:
+          type: string
+          description: Địa chỉ (tùy chọn). Free-text được escape tại output (SEC-04).
+    CreateReviewRequest:
+      type: object
+      description: Body review (stars,comment).
+      required:
+      - stars
+      properties:
+        stars:
+          type: integer
+          description: Số nguyên 1–5 (BRULE-17)
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          description: Tối đa 500 ký tự; lưu raw, escape tại output (XSS)
+          maxLength: 500
+    CreateTripInternalRequest:
+      type: object
+      description: Body INT-06 (SRS §6.6).
+      required:
+      - bookingId
+      - offerId
+      - reservationId
+      - customerId
+      - driverId
+      - pickup
+      - dropoff
+      - vehicleType
+      - commandKey
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        offerId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        pickup:
+          $ref: '#/components/schemas/Coordinate'
+        dropoff:
+          $ref: '#/components/schemas/Coordinate'
+        vehicleType:
+          $ref: '#/components/schemas/VehicleType'
+        snapshot:
+          type: object
+          additionalProperties: true
+          description: Snapshot đi kèm (SRS §6.6 'và snapshot').
+        commandKey:
+          type: string
+          description: Khóa lệnh bền vững; cùng bookingId/commandKey để replay/recover.
+      x-todo: 'Chưa xác định trong SRS/microservice_design: nội dung `snapshot`; vị trí truyền commandKey (body/header); và nguồn của reservation token + distance_m cần cho INT-08/tính Fare (không có trong danh sách field INT-06)'
+    CreateTripInternalResponse:
+      type: object
+      description: 201 {tripId,driverSnapshot,fare} (micro §6.6).
+      required:
+      - tripId
+      - driverSnapshot
+      - fare
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        driverSnapshot:
+          $ref: '#/components/schemas/DriverSnapshot'
+        fare:
+          $ref: '#/components/schemas/Fare'
+    DriverLocationUpdatedPayload:
+      type: object
+      required:
+      - driverId
+      - lat
+      - lng
+      - recordedAt
+      properties:
+        driverId:
+          type: string
+          format: uuid
+        lat:
+          type: number
+        lng:
+          type: number
+        recordedAt:
+          type: string
+          format: date-time
+    DriverSnapshot:
+      type: object
+      description: Driver snapshot {driverId,fullName,plate,vehicleType,ratingAverage} (SRS §16.2.1). Không chứa CCCD/password.
+      required:
+      - driverId
+      - fullName
+      - plate
+      - vehicleType
+      - ratingAverage
+      properties:
+        driverId:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        plate:
+          type: string
+          description: Biển số xe
+        vehicleType:
+          $ref: '#/components/schemas/VehicleType'
+        ratingAverage:
+          type: number
+          description: Điểm đánh giá trung bình
+    ErrorResponse:
+      type: object
+      description: Error envelope chuẩn {error:{code,message},requestId} (SRS §16.2.1 'Lỗi').
+      required:
+      - error
+      - requestId
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              description: 'Mã lỗi nghiệp vụ. Các mã có căn cứ trong tài liệu: MISSING_IDEMPOTENCY_KEY, ACTIVE_OFFER_EXISTS, TRIP_ALREADY_CREATED, TARIFF_NOT_CONFIGURED. Các mã khác chưa được tài liệu liệt kê nên không đặt enum.'
+            message:
+              type: string
+              description: Mô tả lỗi; không chứa SQL/stack trace/token/giấy tờ (SEC-10).
+        requestId:
+          type: string
+          description: X-Request-Id/correlationId của request (NFR-02).
+    EventEnvelope:
+      type: object
+      description: Envelope Kafka (SRS §12.2; micro §7.3). Nếu ghi ở schema khác thì lấy SRS làm chuẩn.
+      required:
+      - eventId
+      - eventType
+      - version
+      - aggregateId
+      - aggregateVersion
+      - occurredAt
+      - producer
+      - correlationId
+      - payload
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          description: Dotted event name, vd trip.completed
+        version:
+          type: integer
+          description: Version schema của envelope/payload (không phải TTL/config)
+        aggregateId:
+          type: string
+          description: ID aggregate (vd tripId)
+        aggregateVersion:
+          type: integer
+          description: Version aggregate của owner producer
+        occurredAt:
+          type: string
+          format: date-time
+          description: UTC ISO-8601
+        producer:
+          type: string
+          description: Service producer, vd trip-service
+        correlationId:
+          type: string
+          description: requestId
+        payload:
+          type: object
+          description: Payload theo từng eventType; không chứa password/token/CCCD/phone plaintext.
+    Fare:
+      type: object
+      description: Fare chính thức do trip-service tính và khóa lúc tạo Trip (SRS §16.2.1 Trip/Fare, BRULE-09).
+      required:
+      - amountVnd
+      - currency
+      - tariffVersion
+      properties:
+        amountVnd:
+          type: integer
+          description: Số tiền VND (bigint).
+          format: int64
+        currency:
+          type: string
+          enum:
+          - VND
+        tariffVersion:
+          type: string
+          description: Phiên bản tariff đã khóa (vd demo-v1 — micro §9.6.6 G03).
+    LocationPoint:
+      type: object
+      description: Vị trí {lat,lng,recordedAt} (SRS §16.2.1 Nearby/Trip).
+      required:
+      - lat
+      - lng
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        recordedAt:
+          type: string
+          format: date-time
+          description: Thời điểm ghi nhận vị trí (UTC)
+    PaymentCompletedPayload:
+      type: object
+      required:
+      - paymentId
+      - tripId
+      - customerId
+      - amountVnd
+      - paidAt
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        amountVnd:
+          type: integer
+          format: int64
+        paidAt:
+          type: string
+          format: date-time
+    Review:
+      type: object
+      description: Review gắn tripId; một Review/Trip.
+      required:
+      - tripId
+      - stars
+      properties:
+        reviewId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      x-todo: 'Chưa xác định trong SRS/microservice_design: field chính xác của DTO Review (SRS chỉ ghi ''Trả Review gắn tripId''; field lấy từ bảng reviews và event)'
+    Trip:
+      type: object
+      description: '{tripId,bookingId,status,driverSnapshot,location,fare,paymentStatus} (SRS §16.2.1 Trip/Fare). fare là view từ bảng fares, khóa cước lúc tạo.'
+      required:
+      - tripId
+      - bookingId
+      - status
+      - driverSnapshot
+      - fare
+      - paymentStatus
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        driverSnapshot:
+          $ref: '#/components/schemas/DriverSnapshot'
+        location:
+          allOf:
+          - $ref: '#/components/schemas/LocationPoint'
+          nullable: true
+        fare:
+          $ref: '#/components/schemas/Fare'
+        paymentStatus:
+          $ref: '#/components/schemas/TripPaymentStatus'
+    TripAssignedPayload:
+      type: object
+      required:
+      - tripId
+      - bookingId
+      - customerId
+      - driverId
+      - driverSnapshot
+      - fare
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        driverSnapshot:
+          $ref: '#/components/schemas/DriverSnapshot'
+        fare:
+          $ref: '#/components/schemas/Fare'
+    TripCanceledPayload:
+      type: object
+      required:
+      - tripId
+      - bookingId
+      - customerId
+      - driverId
+      - reason
+      - canceledBy
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        canceledBy:
+          type: string
+          description: 'Ai hủy. Chưa xác định trong SRS/microservice_design: tập giá trị canceledBy'
+    TripCompletedPayload:
+      type: object
+      required:
+      - tripId
+      - bookingId
+      - customerId
+      - driverId
+      - fare
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        fare:
+          $ref: '#/components/schemas/Fare'
+    TripPayable:
+      type: object
+      description: 'INT-09: {customerId,status,fare,paymentStatus}.'
+      required:
+      - customerId
+      - status
+      - fare
+      - paymentStatus
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        fare:
+          $ref: '#/components/schemas/Fare'
+        paymentStatus:
+          $ref: '#/components/schemas/TripPaymentStatus'
+      x-todo: 'Chưa xác định trong SRS/microservice_design: kiểu `fare` ở INT-09: sơ đồ micro §6.9 minh họa fare: 50000 (số), trong khi DTO Trip/Fare là object {amountVnd,currency,tariffVersion}; đang dùng object'
+    TripPaymentStatus:
+      type: string
+      description: Trip.paymentStatus (SRS §7); khác Payment.status.
+      enum:
+      - UNPAID
+      - PAID
+    TripReviewCreatedPayload:
+      type: object
+      required:
+      - reviewId
+      - tripId
+      - driverId
+      - stars
+      properties:
+        reviewId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+    TripStatus:
+      type: string
+      description: Trạng thái Trip (SRS §7).
+      enum:
+      - ASSIGNED
+      - ARRIVED
+      - IN_PROGRESS
+      - COMPLETED
+      - CANCELED
+    TripStatusChangedPayload:
+      type: object
+      required:
+      - tripId
+      - customerId
+      - driverId
+      - from
+      - to
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        from:
+          $ref: '#/components/schemas/TripStatus'
+        to:
+          $ref: '#/components/schemas/TripStatus'
+    UpdateTripStatusRequest:
+      type: object
+      description: Đúng thứ tự ASSIGNED→ARRIVED→IN_PROGRESS→COMPLETED; sai thứ tự → 409.
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - ARRIVED
+          - IN_PROGRESS
+          - COMPLETED
+    VehicleType:
+      type: string
+      description: Loại xe (allowlist BIKE/SEDAN/SUV — SRS §16.2.1).
+      enum:
+      - BIKE
+      - SEDAN
+      - SUV
+  responses:
+    BadRequest:
+      description: 400 — Validation không hợp lệ, thiếu Idempotency-Key (MISSING_IDEMPOTENCY_KEY) hoặc client gửi trường không được phép (SRS §16.2 bảng mã HTTP).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 403 — Sai role, quyền sở hữu hoặc caller (SEC-06).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 404 — Không tìm thấy tài nguyên (SRS §16.2 bảng mã HTTP).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: 503 — Dependency unavailable; không suy diễn timeout = thất bại nghiệp vụ (SRS §16.2, NFR-07).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 401 — Token/credential/chữ ký/timestamp không hợp lệ; sửa sub/role hoặc alg=none (SEC-05).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Bắt buộc cho lệnh ghi quan trọng (SEC-08, SRS §16.2.1 'Phạm vi Idempotency-Key'). Thiếu → 400 MISSING_IDEMPOTENCY_KEY. Cùng key + cùng body → trả lại response cũ; cùng key nhưng body khác → 422; đang xử lý → 409 (BRULE-21). TTL 24 giờ (IDEMPOTENCY_TTL).
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 64
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Access JWT RS256 do identity-service cấp (TTL 60 phút). Claims: iss, aud, sub (=users.id), role, profileId, accountStatus, scope, iat, exp, jti (SRS §16.2.1). Driver PENDING_APPROVAL/REJECTED chỉ có scope driver.application.read và notifications.read.'
+    serviceToken:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+      description: 'Internal REST credential: JWT HS256 với claims iss (service gọi), aud (service nhận), iat, exp (TTL 60s), jti (SRS §14.1, micro §2.3). Thiếu/sai → 401; caller không nằm trong allowlist → 403. Chỉ tồn tại trên mạng cab-internal; Gateway trả 404 cho mọi /internal/** từ client.'

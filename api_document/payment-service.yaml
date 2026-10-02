@@ -1,0 +1,596 @@
+# payment-service — OpenAPI contract (generated; nguồn: SRS.md v3.6, microservice_design.md v3.7)
+openapi: 3.0.3
+info:
+  title: CAB System — payment-service
+  version: 1.0.0
+  description: |-
+    API contract của **payment-service** — Billing/Payment (BC07, PostgreSQL cab_payment_db): thanh toán online sau Trip COMPLETED, callback Provider (HMAC), idempotency. Payment.amountVnd = Trip.fare; client không gửi amount.
+
+    Actor: CUSTOMER(owner), ADMIN (đọc), Payment Provider (callback HMAC).
+
+    Nguồn duy nhất: `SRS.md` (v3.6) và `microservice_design.md` (v3.7). Mọi operation có `x-source`; chi tiết chưa xác định được đánh dấu `x-todo`. YAML này là contract để implement (docx: 1 service = 1 YAML).
+
+    Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
+servers:
+- url: http://localhost:{port}
+  description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
+  variables:
+    port:
+      default: '8000'
+- url: http://localhost:{port}
+  description: payment-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+  variables:
+    port:
+      default: '3005'
+tags:
+- name: Payment
+  description: Tạo/xem Payment và sandbox (UC-17)
+- name: Callback
+  description: Provider callback (UC-18)
+- name: Health
+  description: Liveness/readiness
+x-kafka-events:
+  description: 'Hợp đồng Kafka (event-driven) của service — KHÔNG phải HTTP endpoint (docx §10). Nguồn: SRS §12.1–12.3, micro §7. Envelope: EventEnvelope. Outbox/inbox at-least-once, manual commit, retry 1/5/25s rồi vào cab.dead-letter.'
+  envelope:
+    $ref: '#/components/schemas/EventEnvelope'
+  produces:
+  - eventType: payment.completed
+    topic: payment.events
+    partitionKey: tripId
+    consumers:
+    - trip-service
+    - notification-service
+    payload:
+      $ref: '#/components/schemas/PaymentCompletedPayload'
+  - eventType: payment.failed
+    topic: payment.events
+    partitionKey: tripId
+    consumers:
+    - notification-service
+    payload:
+      $ref: '#/components/schemas/PaymentFailedPayload'
+  consumes: []
+  consumesNote: Không có subscription nghiệp vụ P1 theo catalog (micro §5.x.5).
+x-outgoing-internal-calls:
+- code: INT-09
+  target: trip-service
+  call: GET /internal/trips/{id}/payable
+  when: Khi tạo Payment.
+paths:
+  /payments:
+    post:
+      tags:
+      - Payment
+      operationId: createPayment
+      summary: Khởi tạo thanh toán online
+      description: Đọc Trip qua INT-09 (phải COMPLETED + UNPAID, customerId == JWT.profileId); tạo Payment `PENDING` + attempt, gọi Provider adapter lấy paymentUrl. Client gửi amount → 400; sai chủ → 403; PENDING với key khác hoặc đã trả → 409; FAILED retry bằng key mới trên cùng Payment. RATE_PAYMENT 10/phút/userId.
+      x-api-type: public
+      x-source: SRS.md §6.9.1, §8.3 UC-17, §9 FR-26, §10 BRULE-18/19/21, §16.2, §16.2.1; microservice_design.md §5.7.2, §6.9, §9.6.4
+      x-roles:
+      - CUSTOMER(owner)
+      x-grpc-rpc: cab.payment.v1.PaymentService/CreatePayment
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+            example:
+              tripId: 50000000-0000-4000-8000-000000000002
+              method: ONLINE
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          description: Payment PENDING + paymentUrl.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 409 — Request cùng Idempotency-Key đang xử lý (IN_PROGRESS) hoặc xung đột nghiệp vụ (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 422 — Cùng Idempotency-Key nhưng body khác (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /payments/{id}:
+    get:
+      tags:
+      - Payment
+      operationId: getPayment
+      summary: Xem Payment
+      description: Customer chủ Payment hoặc ADMIN. Dùng để xác nhận COMPLETED sau callback.
+      x-api-type: public
+      x-source: SRS.md §8.3 UC-17, §9 FR-27, §16.2, §16.2.1; microservice_design.md §5.7.2
+      x-roles:
+      - CUSTOMER(owner)
+      - ADMIN
+      x-grpc-rpc: cab.payment.v1.PaymentService/GetPayment
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Payment ID
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Payment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /payments/callback:
+    post:
+      tags:
+      - Callback
+      operationId: paymentCallback
+      summary: Provider callback
+      description: Provider gọi qua Gateway; Gateway chuyển nguyên raw body. Verify HMAC-SHA256(timestamp + '.' + rawBody) và timestamp (skew 5 phút) TRƯỚC khi parse; đối chiếu providerTxnRef/amountVnd; dedupe providerEventId. SUCCESS→COMPLETED + outbox `payment.completed`; FAILED→FAILED + `payment.failed`; COMPLETED không bị hạ. Chữ ký/timestamp sai → 401; amountVnd lệch → 422; event trùng → 200 + kết quả cũ. Swagger UI không tự tính HMAC — dùng mock/sandbox-confirm để test.
+      x-api-type: public
+      x-source: SRS.md §6.9.2, §8.3 UC-18, §9 FR-28, §10 BRULE-20, §16.0 SEC-09, §16.2, §16.2.1; microservice_design.md §2.6.3, §5.7.2, §6.9, §9.6.4
+      x-roles:
+      - PROVIDER(HMAC)
+      x-grpc-rpc: cab.payment.v1.PaymentService/HandleCallback
+      x-todo: 'Chưa xác định trong SRS/microservice_design: encoding X-Signature và format X-Timestamp'
+      parameters:
+      - name: X-Timestamp
+        in: header
+        required: true
+        description: Timestamp tham gia chữ ký (SEC-09).
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderCallbackRequest'
+            example:
+              providerEventId: evt-0001
+              providerTxnRef: txn-0001
+              status: SUCCESS
+              amountVnd: 25000
+      security:
+      - providerSignature: []
+      responses:
+        '200':
+          description: Kết quả (hoặc kết quả cũ khi trùng).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: 422 — amountVnd lệch hoặc cùng providerEventId khác body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /payments/{id}/sandbox-confirm:
+    post:
+      tags:
+      - Payment
+      operationId: sandboxConfirm
+      summary: 'Sandbox: mô phỏng callback'
+      description: Chỉ khi SANDBOX_MODE=true; chủ Payment gọi, mock gửi callback vào Gateway với chữ ký HMAC hợp lệ (không ghi DB Payment trực tiếp). scenario SUCCESS/FAIL/DUPLICATE_CALLBACK; DUPLICATE_CALLBACK → 200 kết quả cũ, Kafka chỉ 1 `payment.completed` (PC30).
+      x-api-type: public
+      x-source: SRS.md §8.3 UC-17, §9 FR-29, §16.2, §17 PC30; microservice_design.md §5.7.2, §10.4
+      x-roles:
+      - CUSTOMER(owner), sandbox only
+      x-grpc-rpc: cab.payment.v1.PaymentService/SandboxConfirm
+      x-todo: 'Chưa xác định trong SRS/microservice_design: body response 200 và status code khi SANDBOX_MODE=false'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Payment ID
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SandboxConfirmRequest'
+            example:
+              scenario: SUCCESS
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Đã mô phỏng callback.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 409 — Request cùng Idempotency-Key đang xử lý (IN_PROGRESS) hoặc xung đột nghiệp vụ (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 422 — Cùng Idempotency-Key nhưng body khác (BRULE-21).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /health:
+    get:
+      tags:
+      - Health
+      operationId: health
+      summary: Liveness
+      description: 'Liveness: process sống; không gọi DB/Kafka/Redis (SRS §16.2.1 ''Ràng buộc ghi, bảo mật và readiness''). Health nội bộ có credential (micro §9.5).'
+      x-api-type: health
+      x-source: SRS.md §16.0 NFR-01, §16.2.1; microservice_design.md §5.x.3, §9.5
+      x-roles:
+      - INTERNAL (X-Service-Token)
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response body của /health và /ready từng service không được tài liệu định nghĩa (chỉ /health/services của Gateway có schema {services,checkedAt})'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: payment-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3005'
+      responses:
+        '200':
+          description: Process còn sống.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /ready:
+    get:
+      tags:
+      - Health
+      operationId: ready
+      summary: Readiness
+      description: 'Readiness: kiểm DB riêng và Kafka (NFR-01). Dependency DOWN → 503 (UC-01 AC-01.2, NFR-01). Runtime phải chứng minh 503 rồi hồi phục 200 khi dependency lên lại (SRS §16.2.1).'
+      x-api-type: health
+      x-source: SRS.md §8.3 UC-01, §16.0 NFR-01, §16.2.1; microservice_design.md §9.5
+      x-roles:
+      - INTERNAL (X-Service-Token)
+      x-todo: 'Chưa xác định trong SRS/microservice_design: response body của /health và /ready từng service không được tài liệu định nghĩa (chỉ /health/services của Gateway có schema {services,checkedAt})'
+      security:
+      - serviceToken: []
+      servers:
+      - url: http://localhost:{port}
+        description: payment-service trực tiếp trong mạng cab-internal / local dev (cổng hiện tại của project; không publish ra host ở môi trường chuẩn).
+        variables:
+          port:
+            default: '3005'
+      responses:
+        '200':
+          description: Sẵn sàng.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  schemas:
+    CallbackResult:
+      type: object
+      description: 200 kết quả; duplicate trả nguyên kết quả đã lưu.
+      required:
+      - result
+      properties:
+        result:
+          type: string
+      x-todo: 'Chưa xác định trong SRS/microservice_design: body response callback (micro §6.9 minh họa {result:''SUCCESS''}; SRS ghi ''200 kết quả'')'
+    CreatePaymentRequest:
+      type: object
+      description: Chỉ {tripId,method}; trường lạ (vd amount/user_id) → 400 (BRULE-18, PC30).
+      required:
+      - tripId
+      - method
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        method:
+          type: string
+          enum:
+          - ONLINE
+      additionalProperties: false
+    ErrorResponse:
+      type: object
+      description: Error envelope chuẩn {error:{code,message},requestId} (SRS §16.2.1 'Lỗi').
+      required:
+      - error
+      - requestId
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              description: 'Mã lỗi nghiệp vụ. Các mã có căn cứ trong tài liệu: MISSING_IDEMPOTENCY_KEY, ACTIVE_OFFER_EXISTS, TRIP_ALREADY_CREATED, TARIFF_NOT_CONFIGURED. Các mã khác chưa được tài liệu liệt kê nên không đặt enum.'
+            message:
+              type: string
+              description: Mô tả lỗi; không chứa SQL/stack trace/token/giấy tờ (SEC-10).
+        requestId:
+          type: string
+          description: X-Request-Id/correlationId của request (NFR-02).
+    EventEnvelope:
+      type: object
+      description: Envelope Kafka (SRS §12.2; micro §7.3). Nếu ghi ở schema khác thì lấy SRS làm chuẩn.
+      required:
+      - eventId
+      - eventType
+      - version
+      - aggregateId
+      - aggregateVersion
+      - occurredAt
+      - producer
+      - correlationId
+      - payload
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          description: Dotted event name, vd trip.completed
+        version:
+          type: integer
+          description: Version schema của envelope/payload (không phải TTL/config)
+        aggregateId:
+          type: string
+          description: ID aggregate (vd tripId)
+        aggregateVersion:
+          type: integer
+          description: Version aggregate của owner producer
+        occurredAt:
+          type: string
+          format: date-time
+          description: UTC ISO-8601
+        producer:
+          type: string
+          description: Service producer, vd trip-service
+        correlationId:
+          type: string
+          description: requestId
+        payload:
+          type: object
+          description: Payload theo từng eventType; không chứa password/token/CCCD/phone plaintext.
+    PaymentCompletedPayload:
+      type: object
+      required:
+      - paymentId
+      - tripId
+      - customerId
+      - amountVnd
+      - paidAt
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        amountVnd:
+          type: integer
+          format: int64
+        paidAt:
+          type: string
+          format: date-time
+    PaymentCreated:
+      type: object
+      description: 201 {paymentId,tripId,status,amountVnd,paymentUrl?} (SRS §16.2.1). Replay POST trả response khởi tạo cũ.
+      required:
+      - paymentId
+      - tripId
+      - status
+      - amountVnd
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+        amountVnd:
+          type: integer
+          format: int64
+        paymentUrl:
+          type: string
+          description: 'Dữ liệu nhạy cảm: che log, mã hóa cache.'
+    PaymentFailedPayload:
+      type: object
+      required:
+      - paymentId
+      - tripId
+      - customerId
+      - reason
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+    PaymentStatus:
+      type: string
+      description: Trạng thái Payment (SRS §7).
+      enum:
+      - PENDING
+      - COMPLETED
+      - FAILED
+    PaymentView:
+      type: object
+      description: GET → {paymentId,status,amountVnd,tripId}; trạng thái mới nhất.
+      required:
+      - paymentId
+      - tripId
+      - status
+      - amountVnd
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+        amountVnd:
+          type: integer
+          format: int64
+    ProviderCallbackRequest:
+      type: object
+      description: Body callback; ký trên raw body.
+      required:
+      - providerEventId
+      - providerTxnRef
+      - status
+      - amountVnd
+      properties:
+        providerEventId:
+          type: string
+          description: Dedupe key
+        providerTxnRef:
+          type: string
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILED
+          description: Status phía provider; không nhầm enum Payment.
+        amountVnd:
+          type: integer
+          format: int64
+    SandboxConfirmRequest:
+      type: object
+      required:
+      - scenario
+      properties:
+        scenario:
+          type: string
+          enum:
+          - SUCCESS
+          - FAIL
+          - DUPLICATE_CALLBACK
+  responses:
+    BadRequest:
+      description: 400 — Validation không hợp lệ, thiếu Idempotency-Key (MISSING_IDEMPOTENCY_KEY) hoặc client gửi trường không được phép (SRS §16.2 bảng mã HTTP).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 403 — Sai role, quyền sở hữu hoặc caller (SEC-06).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 404 — Không tìm thấy tài nguyên (SRS §16.2 bảng mã HTTP).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: 503 — Dependency unavailable; không suy diễn timeout = thất bại nghiệp vụ (SRS §16.2, NFR-07).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: 429 — Vượt rate limit tại Gateway; kèm Retry-After (SEC-07).
+      headers:
+        Retry-After:
+          description: Số giây đến thời điểm cửa sổ rate được mở lại (SRS §16.2.1).
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 401 — Token/credential/chữ ký/timestamp không hợp lệ; sửa sub/role hoặc alg=none (SEC-05).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Bắt buộc cho lệnh ghi quan trọng (SEC-08, SRS §16.2.1 'Phạm vi Idempotency-Key'). Thiếu → 400 MISSING_IDEMPOTENCY_KEY. Cùng key + cùng body → trả lại response cũ; cùng key nhưng body khác → 422; đang xử lý → 409 (BRULE-21). TTL 24 giờ (IDEMPOTENCY_TTL).
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 64
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Access JWT RS256 do identity-service cấp (TTL 60 phút). Claims: iss, aud, sub (=users.id), role, profileId, accountStatus, scope, iat, exp, jti (SRS §16.2.1). Driver PENDING_APPROVAL/REJECTED chỉ có scope driver.application.read và notifications.read.'
+    providerSignature:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: 'Chữ ký callback của Payment Provider: HMAC-SHA256(timestamp + ''.'' + rawBody) cùng header X-Timestamp (SEC-09). Verify trên raw body trước khi parse; lệch quá CALLBACK_CLOCK_SKEW (5 phút) → 401.'
+      x-todo: 'Chưa xác định trong SRS/microservice_design: encoding của chữ ký (hex/base64) và định dạng X-Timestamp (epoch/ISO)'
+    serviceToken:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+      description: 'Internal REST credential: JWT HS256 với claims iss (service gọi), aud (service nhận), iat, exp (TTL 60s), jti (SRS §14.1, micro §2.3). Thiếu/sai → 401; caller không nằm trong allowlist → 403. Chỉ tồn tại trên mạng cab-internal; Gateway trả 404 cho mọi /internal/** từ client.'

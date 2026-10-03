@@ -1,0 +1,15 @@
+export const serviceEndpoints = [
+  { method: "GET", path: "/health", access: "health", description: "Liveness của booking-service" },
+  { method: "GET", path: "/ready", access: "internal", description: "Readiness và trạng thái dependency" },
+  { method: "GET", path: "/endpoints", access: "metadata", description: "Danh mục endpoint của service" },
+  { method: "POST", path: "/fare-estimates", access: "public", roles: ["CUSTOMER", "ADMIN"], description: "Ước tính cước chuyến đi" },
+  { method: "POST", path: "/bookings", access: "public", roles: ["CUSTOMER"], idempotent: true, description: "Đặt xe và tìm tài xế" },
+  { method: "GET", path: "/bookings", access: "public", roles: ["CUSTOMER(owner)", "ADMIN"], description: "Liệt kê booking có phân trang" },
+  { method: "GET", path: "/bookings/:id", access: "public", roles: ["CUSTOMER(owner)", "ADMIN"], description: "Xem chi tiết booking" },
+  { method: "POST", path: "/bookings/:id/cancel", access: "public", roles: ["CUSTOMER(owner)"], idempotent: true, description: "Hủy booking chưa tạo trip" },
+  { method: "GET", path: "/offers", access: "public", roles: ["DRIVER"], description: "Liệt kê đề nghị chuyến của tài xế" },
+  { method: "GET", path: "/offers/:id", access: "public", roles: ["DRIVER(owner)"], description: "Xem chi tiết đề nghị chuyến" },
+  { method: "POST", path: "/offers/:id/accept", access: "public", roles: ["DRIVER(owner)"], idempotent: true, description: "Tài xế nhận chuyến" },
+  { method: "POST", path: "/offers/:id/reject", access: "public", roles: ["DRIVER(owner)"], idempotent: true, description: "Tài xế từ chối chuyến" },
+  { method: "POST", path: "/internal/bookings/:id/status", access: "internal", description: "Đồng bộ trạng thái booking từ trip-service" },
+];

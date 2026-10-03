@@ -1,0 +1,14 @@
+{
+    "name": "@cab/booking-service",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node src/index.js",
+        "dev": "node --watch src/index.js",
+        "migrate": "node scripts/migrate.js",
+        "seed": "node scripts/seed.js",
+        "test": "node --test"
+    }
+}

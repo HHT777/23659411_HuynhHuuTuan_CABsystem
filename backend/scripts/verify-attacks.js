@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import { signJwt } from "../shared/jwt.js";
+process.env.JWT_PRIVATE_KEY_PATH = ".secrets/jwt-private.pem";
+process.env.JWT_PUBLIC_KEY_PATH = ".secrets/jwt-public.pem";
+const stamp = Date.now();
+function token(role) { const id = crypto.randomUUID(); return signJwt({ sub: id, profileId: id, role, iss: "identity-service", aud: "cab-gateway", exp: Math.floor(Date.now() / 1000) + 300 }); }
+async function request(method, path, body, auth, key) {
+  const result = await fetch(`http://localhost:8000${path}`, { method, headers: { "Content-Type": "application/json", ...(auth ? { Authorization: `Bearer ${auth}` } : {}), ...(key ? { "Idempotency-Key": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  return { status: result.status, body: await result.json() };
+}
+const phone = `+847${stamp}`;
+const challenge = await request("POST", "/drivers/otp/request", { phone });
+assert.equal(challenge.status, 202);
+const proofBody = { phone, challengeId: challenge.body.challengeId, code: "123456" };
+const proof = await request("POST", "/drivers/otp/verify", proofBody);
+assert.equal(proof.status, 200);
+assert.equal((await request("POST", "/drivers/otp/verify", proofBody)).status, 422);
+const driver = await request("POST", "/drivers/register", { phone, email: `reject-${stamp}@cab.local`, fullName: "Rejection test", password: "Driver123!", plate: "59A-99999", vehicleType: "BIKE", citizenId: "012345678901", licenseNumber: "GPLX-123" }, proof.body.registrationToken, `rejection-${stamp}`);
+assert.equal(driver.status, 201);
+const admin = token("ADMIN");
+assert.equal((await request("POST", `/admin/drivers/${driver.body.driverId}/reject`, {}, admin)).status, 400);
+assert.equal((await request("POST", `/admin/drivers/${driver.body.driverId}/reject`, { reason: "Hồ sơ không hợp lệ" }, admin)).status, 200);
+assert.equal((await request("PUT", "/drivers/me/availability", { status: "ONLINE" }, proof.body.registrationToken)).status, 403);
+const notifications = await request("GET", "/notifications", undefined, proof.body.registrationToken);
+assert.ok(notifications.body.items.some(x => x.type === "DRIVER_REJECTED"));
+console.log("PASS OTP one-time use, Admin reject with reason, rejected driver cannot go online, rejection notification persisted.");
+const record = JSON.parse(fs.readFileSync(".secrets/restart-check.json"));
+const customer = token("CUSTOMER");
+assert.equal((await request("POST", "/payments", { tripId: record.tripId, method: "ONLINE" }, customer, record.key)).status, 403);
+assert.equal((await request("GET", "/bookings", undefined, `${customer}.extra`)).status, 401);
+console.log("PASS idempotency key isolated by user; malformed JWT rejected.");
+const start = Date.now();
+const results = await Promise.all(Array.from({ length: 1005 }, (_, index) => request("POST", "/bookings", {}, customer, `burst-${stamp}-${index}`)));
+const counts = {};
+for (const result of results) counts[result.status] = (counts[result.status] ?? 0) + 1;
+assert.equal(counts[400], 5);
+assert.equal(counts[429], 1000);
+assert.equal((await request("GET", "/ready")).status, 200);
+console.log(`PASS burst: 1005 concurrent requests, ${JSON.stringify(counts)}, elapsed ${Date.now() - start}ms; Gateway remains ready.`);

@@ -1,0 +1,26 @@
+{
+    "name": "cab-system-backend",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "engines": {
+        "node": ">=20 <25"
+    },
+    "workspaces": [
+        "gateway",
+        "services/*"
+    ],
+    "scripts": {
+        "check:syntax": "node scripts/check-contracts.js",
+        "test:gateway": "node --test gateway/tests/contract/route-rpc.test.js gateway/tests/contract/endpoints-catalog.test.js gateway/tests/integration/payment-raw-body.test.js",
+        "test:postman": "node scripts/run-postman.js"
+    },
+    "dependencies": {
+        "express": "4.21.2",
+        "mongodb": "^7.7.0",
+        "pg": "^8.23.1"
+    },
+    "devDependencies": {
+        "newman": "^6.2.2"
+    }
+}

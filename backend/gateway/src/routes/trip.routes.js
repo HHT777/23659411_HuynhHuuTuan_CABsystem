@@ -1,0 +1,1 @@
+export const tripRoutes = "/trips";

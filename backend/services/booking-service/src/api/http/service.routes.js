@@ -116,6 +116,7 @@ export function registerRoutes(app, context) {
           pickup,
           destination,
           dropoff: destination,
+          tripId: null,
           status: "PENDING",
           expiresAt,
         };
@@ -273,6 +274,7 @@ export function registerRoutes(app, context) {
         driverId: user.profileId,
         status: "ASSIGNED",
       };
+      offer.tripId = tripResult.tripId;
       saveIdempotency(request, "offer-accept", 200, result);
       return response.json(result);
     });

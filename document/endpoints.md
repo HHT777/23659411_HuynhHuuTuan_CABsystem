@@ -60,6 +60,7 @@ Quy ước header:
 | GET | `/bookings/:id` | Customer sở hữu/Admin | Customer xem booking theo ID |
 | GET | `/bookings/:customerId` | Admin | Tất cả booking theo customer ID |
 | POST | `/bookings/:id/cancel` | Customer sở hữu | Hủy booking SEARCHING hoặc ASSIGNED |
+| POST | `/offers/:id/accept` | Driver sở hữu | Nhận offer và tạo trip; response `tripId` là ID dùng để thanh toán |
 | GET | `/offers` | Driver | Danh sách offer |
 | GET | `/offers/:id` | Driver sở hữu | Chi tiết offer |
 | POST | `/offers/:id/accept` | Driver sở hữu | Nhận chuyến |

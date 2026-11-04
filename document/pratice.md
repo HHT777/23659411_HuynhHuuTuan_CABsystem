@@ -211,6 +211,8 @@ Postman, dùng `C`:
 GET {{base}}/bookings?page=1&limit=5
 ```
 
+Sau khi Driver nhận offer, dùng `tripId` trong response `POST /offers/:id/accept` hoặc `activeTripId` từ `GET /bookings/:bookingId` khi gọi `POST /payments`. Không dùng `offerId` làm `tripId`.
+
 Đạt: `200`, có `items/page/limit/total`, chỉ có booking của Customer hiện tại.
 
 ---

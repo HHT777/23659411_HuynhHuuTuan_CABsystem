@@ -1,0 +1,22 @@
+# Use this workspace to collaborate
+workspace:
+  id: 5d5db264-49ee-48a3-84dd-8b56887496de
+
+localResources:
+  specs:
+    - ../api_document/booking-service.yaml
+    - ../api_document/customer-service.yaml
+    - ../api_document/driver-service.yaml
+    - ../api_document/identity-service.yaml
+    - ../api_document/notification-service.yaml
+    - ../api_document/payment-service.yaml
+    - ../api_document/trip-service.yaml
+    - ../backend/shared/contracts/proto/booking.v1.proto
+    - ../backend/shared/contracts/proto/customer.v1.proto
+    - ../backend/shared/contracts/proto/driver.v1.proto
+    - ../backend/shared/contracts/proto/identity.v1.proto
+    - ../backend/shared/contracts/proto/notification.v1.proto
+    - ../backend/shared/contracts/proto/payment.v1.proto
+    - ../backend/shared/contracts/proto/trip.v1.proto
+    - ../backend/shared/contracts/proto/google/rpc/error_details.proto
+    - ../backend/shared/contracts/proto/grpc/health/v1/health.proto

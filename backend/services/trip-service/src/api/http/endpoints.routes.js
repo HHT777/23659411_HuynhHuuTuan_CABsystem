@@ -2,7 +2,8 @@ export const serviceEndpoints = [
   { method: "GET", path: "/health", access: "health", description: "Liveness của trip-service" },
   { method: "GET", path: "/ready", access: "internal", description: "Readiness và trạng thái dependency" },
   { method: "GET", path: "/endpoints", access: "metadata", description: "Danh mục endpoint của service" },
-  { method: "GET", path: "/trips/:id", access: "public", roles: ["CUSTOMER(owner)", "DRIVER(owner)", "ADMIN"], description: "Xem chuyến đi" },
+  { method: "GET", path: "/trips", access: "public", roles: ["CUSTOMER"], description: "Lấy toàn bộ trip của Customer hiện tại" },
+  { method: "GET", path: "/trips/:id", access: "public", roles: ["CUSTOMER(owner)", "DRIVER(owner)", "ADMIN"], description: "User xem trip theo ID; Admin truyền customerId để lấy toàn bộ trip của khách hàng" },
   { method: "PATCH", path: "/trips/:id/status", access: "public", roles: ["DRIVER(owner)"], description: "Cập nhật trạng thái chuyến đúng trình tự" },
   { method: "PUT", path: "/trips/:id/location", access: "public", roles: ["DRIVER(owner)"], description: "Cập nhật vị trí khi chuyến đang chạy" },
   { method: "POST", path: "/trips/:id/cancel", access: "public", roles: ["CUSTOMER(owner)", "DRIVER(owner)"], description: "Hủy chuyến kèm lý do" },
@@ -11,4 +12,6 @@ export const serviceEndpoints = [
   { method: "POST", path: "/internal/trips", access: "internal", description: "Tạo trip từ offer được chấp nhận" },
   { method: "GET", path: "/internal/trips/:id/payable", access: "internal", description: "Lấy thông tin trip có thể thanh toán" },
   { method: "POST", path: "/internal/trips/:id/paid", access: "internal", description: "Đánh dấu trip đã thanh toán" },
+  { method: "GET", path: "/internal/customers/:id/active-trip", access: "internal", description: "Tra cứu chuyến đang hoạt động của khách hàng" },
+  { method: "POST", path: "/internal/trips/:id/cancel", access: "internal", description: "Hủy trip khi booking ASSIGNED bị hủy" },
 ];

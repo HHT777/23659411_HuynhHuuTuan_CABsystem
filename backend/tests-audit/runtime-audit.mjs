@@ -132,7 +132,7 @@ check("PC12", "driver not found", result.status, 404, result.payload);
 result = await req("GET", "/drivers/20000000-0000-4000-8000-000000000001");
 check("PC12/PC28", "driver without token", result.status, 401, result.payload);
 
-result = await req("GET", "/drivers/nearby?lat=10.7735&lng=106.699&radius=1000&page=1&limit=2", undefined, bearer(customerToken));
+result = await req("GET", "/drivers/nearby?lat=10.7735&lng=106.699&radius=3000&page=1&limit=2", undefined, bearer(customerToken));
 check("PC13", "nearby paging", result.status, 200, result.payload);
 result = await req("GET", "/drivers/nearby?lat=bad&lng=bad&radius=-1", undefined, bearer(customerToken));
 check("PC13", "nearby invalid coordinates", result.status, 400, result.payload);
@@ -296,13 +296,10 @@ check("PC21", "OTP verify", verified.status, 200, verified.payload);
 const newDriverEmail = `audit-driver-${runId}@cab.local`;
 const driverRegistration = await req("POST", "/drivers/register", {
   fullName: "Audit Driver",
-  phone: otpPhone,
   email: newDriverEmail,
   password: "Driver123!",
   vehicleType: "BIKE",
   plate: "51A-12345",
-  citizenId: "012345678901",
-  licenseNumber: "GPLX-123",
 }, {
   Authorization: `Bearer ${verified.payload.registrationToken}`,
   "Idempotency-Key": `driver-register-${runId}`,

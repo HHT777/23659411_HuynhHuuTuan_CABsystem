@@ -7,13 +7,13 @@ process.env.JWT_PUBLIC_KEY_PATH = ".secrets/jwt-public.pem";
 const stamp = Date.now();
 function token(role) { const id = crypto.randomUUID(); return signJwt({ sub: id, profileId: id, role, iss: "identity-service", aud: "cab-gateway", exp: Math.floor(Date.now() / 1000) + 300 }); }
 async function request(method, path, body, auth, key) {
-  const result = await fetch(`http://localhost:8000${path}`, { method, headers: { "Content-Type": "application/json", ...(auth ? { Authorization: `Bearer ${auth}` } : {}), ...(key ? { "Idempotency-Key": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const result = await fetch(`http://localhost:8000/api/v1${path}`, { method, headers: { "Content-Type": "application/json", ...(auth ? { Authorization: `Bearer ${auth}` } : {}), ...(key ? { "Idempotency-Key": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: result.status, body: await result.json() };
 }
 const phone = `+847${stamp}`;
 const challenge = await request("POST", "/drivers/otp/request", { phone });
 assert.equal(challenge.status, 202);
-const proofBody = { phone, challengeId: challenge.body.challengeId, code: "123456" };
+const proofBody = { phone, challengeId: challenge.body.challengeId, code: challenge.body.otpCode };
 const proof = await request("POST", "/drivers/otp/verify", proofBody);
 assert.equal(proof.status, 200);
 assert.equal((await request("POST", "/drivers/otp/verify", proofBody)).status, 422);

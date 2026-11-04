@@ -24,7 +24,7 @@ export function publicEndpointCatalog() {
         .filter((endpoint) => endpoint.access === "public")
         .map((endpoint) => ({
           ...endpoint,
-          url: `http://localhost:8000${endpoint.path}`,
+          url: `http://localhost:8000/api/v1${endpoint.path}`,
           requiredHeaders: [
             ...(endpoint.roles?.some(
               (role) => !["PUBLIC", "PAYMENT_PROVIDER(HMAC)"].includes(role),

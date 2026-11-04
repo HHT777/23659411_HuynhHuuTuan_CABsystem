@@ -38,7 +38,7 @@ test("payment callback verifies the exact raw bytes forwarded by Gateway", async
     .update(rawBody)
     .digest("hex");
   const response = await fetch(
-    `http://127.0.0.1:${gateway.port}/payments/callback`,
+    `http://127.0.0.1:${gateway.port}/api/v1/payments/callback`,
     {
       method: "POST",
       headers: {

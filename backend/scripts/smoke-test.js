@@ -1,4 +1,4 @@
-const baseUrl = process.env.GATEWAY_URL ?? "http://localhost:8000";
+const baseUrl = process.env.GATEWAY_URL ?? "http://localhost:8000/api/v1";
 const unique = Date.now();
 const checks = [];
 try {
@@ -66,7 +66,7 @@ const profile = await request(
 expect("PC11 profile", profile.response.status, 200);
 const nearby = await request(
   "GET",
-  "/drivers/nearby?lat=10.7735&lng=106.699&radius=1000&page=1&limit=2",
+  "/drivers/nearby?lat=10.7735&lng=106.699&radius=3000&page=1&limit=2",
   undefined,
   { Authorization: `Bearer ${customerToken}` },
 );

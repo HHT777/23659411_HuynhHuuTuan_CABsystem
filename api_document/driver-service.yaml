@@ -12,7 +12,7 @@ info:
 
     Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
 servers:
-- url: http://localhost:{port}
+- url: http://localhost:{port}/api/v1
   description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
   variables:
     port:
@@ -150,7 +150,7 @@ paths:
       - Driver Registration
       operationId: requestDriverOtp
       summary: Yêu cầu OTP đăng ký Driver
-      description: Tạo OTP (hash trong DB, TTL 5 phút, TTL index Redis); SMS adapter mock gửi mã (không gọi notification-service). Sandbox mã cố định 123456. RATE_OTP 3/5 phút/phone+IP.
+      description: Tạo OTP ngẫu nhiên 6 chữ số, TTL 5 phút. Sandbox trả `otpCode` để kiểm thử Postman; môi trường khác gửi qua SMS adapter và không trả mã. RATE_OTP 3/5 phút/phone+IP.
       x-api-type: public
       x-source: SRS.md §6.2, §8.3 UC-06, §16.1 OTP_*/RATE_OTP, §16.2; microservice_design.md §5.4.2, §6.2, §10.4
       x-roles:
@@ -201,7 +201,7 @@ paths:
             example:
               challengeId: 00000000-0000-4000-8000-000000000000
               phone: '+84912345678'
-              code: '123456'
+              code: '483071'
       security: []
       responses:
         '200':
@@ -228,7 +228,7 @@ paths:
       - Driver Registration
       operationId: registerDriver
       summary: Nộp hồ sơ đăng ký Driver
-      description: Nhận hồ sơ CCCD/bằng lái/xe cùng registrationToken; mã hóa CCCD/bằng lái; gọi INT-02 tạo Account; lưu Driver `PENDING_APPROVAL` (FR-07). Replay cùng Idempotency-Key + body trả kết quả cũ kể cả token đã hết hạn sau lần nhận hợp lệ; token dùng cho operation/key khác → 401; thiếu giấy tờ → 400.
+      description: Nhận 5 trường bắt buộc (họ tên, email, mật khẩu, loại xe, biển số) cùng registrationToken; số điện thoại lấy từ bước xác minh OTP. CCCD và bằng lái là tùy chọn và được mã hóa nếu có. Gọi INT-02 tạo Account; lưu Driver `PENDING_APPROVAL` (FR-07).
       x-api-type: public
       x-source: SRS.md §6.2, §8.3 UC-06, §16.2, §16.2.1; microservice_design.md §5.4.2, §6.2, §9.6.3
       x-roles:
@@ -244,14 +244,11 @@ paths:
             schema:
               $ref: '#/components/schemas/DriverRegisterRequest'
             example:
-              phone: '+84912345678'
-              password: Secret123
               fullName: Tran Van B
-              citizenId: 079012345678
-              licenseNumber: B2-123456
+              email: driver@example.com
+              password: Secret123
               vehicleType: BIKE
               plate: 59A1-12345
-              vehicleModel: Honda Wave
       security:
       - registrationToken: []
       responses:
@@ -576,7 +573,7 @@ paths:
       - Driver Nearby
       operationId: nearbyDrivers
       summary: Tìm tài xế gần
-      description: 'Lọc bán kính bằng Haversine trên vị trí owner; mặc định status=ONLINE, radius=NEARBY_RADIUS_DEFAULT 1000m; sắp (distanceM,id). API công khai KHÔNG áp LOCATION_MAX_AGE (AUD-04). Offline/BUSY/pending bị loại mặc định. Sai tọa độ/radius/paging → 400/422. Seed: radius=1000 → D1,D2,D3 total=3 (PC13).'
+      description: 'Lọc bán kính bằng Haversine trên vị trí owner; mặc định status=ONLINE, radius=NEARBY_RADIUS_DEFAULT 3000m; sắp (distanceM,id). API công khai KHÔNG áp LOCATION_MAX_AGE (AUD-04). Offline/BUSY/pending bị loại mặc định. Sai tọa độ/radius/paging → 400/422.'
       x-api-type: public
       x-source: SRS.md §6.4, §8.3 UC-09, §9 FR-13, §10 BRULE-07/08, §16.2, §16.2.1 'Nearby'; microservice_design.md §5.4.2, §6.4
       x-roles:
@@ -599,10 +596,10 @@ paths:
       - name: radius
         in: query
         required: false
-        description: Bán kính (mét); mặc định 1000.
+        description: Bán kính (mét); mặc định 3000.
         schema:
           type: integer
-          default: 1000
+          default: 3000
       - name: status
         in: query
         required: false
@@ -649,7 +646,7 @@ paths:
       - Internal
       operationId: internalNearbyDrivers
       summary: '[INT-03] Ứng viên dispatch gần'
-      description: 'booking-service lấy ứng viên: Driver ONLINE, cùng loại xe, vị trí mới (≤ LOCATION_MAX_AGE 60s), không có reservation/offer/Trip hoạt động; trong DISPATCH_RADIUS 5000m (BRULE-11).'
+      description: 'booking-service lấy ứng viên: Driver ONLINE, cùng loại xe, vị trí mới (≤ LOCATION_MAX_AGE 60s), không có reservation/offer/Trip hoạt động; trong DISPATCH_RADIUS 3000m (BRULE-11).'
       x-api-type: internal
       x-internal-contract: INT-03
       x-allowed-callers:
@@ -680,10 +677,10 @@ paths:
       - name: radius
         in: query
         required: false
-        description: Mặc định DISPATCH_RADIUS=5000m
+        description: Mặc định DISPATCH_RADIUS=3000m
         schema:
           type: integer
-          default: 5000
+          default: 3000
       security:
       - serviceToken: []
       servers:
@@ -1221,20 +1218,17 @@ components:
           type: number
     DriverRegisterRequest:
       type: object
-      description: Body POST /drivers/register (SRS §16.2). Thiếu giấy tờ → 400.
+      description: Body POST /drivers/register. Số điện thoại lấy từ bước xác minh OTP; CCCD và bằng lái không bắt buộc, được mã hóa nếu gửi kèm.
       required:
-      - phone
-      - password
       - fullName
-      - citizenId
-      - licenseNumber
+      - email
+      - password
       - vehicleType
       - plate
-      - vehicleModel
       properties:
         phone:
           type: string
-          description: E.164; phải khớp phone gắn trong registrationToken
+          description: Tùy chọn để tương thích request cũ; nếu truyền phải khớp số điện thoại đã xác minh OTP.
         password:
           type: string
           minLength: 6
@@ -1243,15 +1237,15 @@ components:
         email:
           type: string
           format: email
-          description: Tùy chọn (BRULE-01)
+          description: Bắt buộc để đăng nhập bằng email.
         fullName:
           type: string
         citizenId:
           type: string
-          description: CCCD; mã hóa AES-256-GCM tại driver-service.
+          description: Tùy chọn; mã hóa AES-256-GCM tại driver-service nếu được cung cấp.
         licenseNumber:
           type: string
-          description: Số bằng lái; mã hóa tại driver-service.
+          description: Tùy chọn; mã hóa tại driver-service nếu được cung cấp.
         vehicleType:
           $ref: '#/components/schemas/VehicleType'
         plate:
@@ -1474,13 +1468,17 @@ components:
           - DRIVER_REGISTRATION
     OtpRequestResponse:
       type: object
-      description: 202 {challengeId}.
+      description: 202 trả challenge; sandbox trả thêm otpCode ngẫu nhiên để kiểm thử.
       required:
       - challengeId
       properties:
         challengeId:
           type: string
           format: uuid
+        otpCode:
+          type: string
+          pattern: '^\\d{6}$'
+          description: Chỉ có khi SANDBOX_MODE=true.
     OtpVerifyRequest:
       type: object
       required:
@@ -1495,7 +1493,7 @@ components:
           type: string
         code:
           type: string
-          description: 'Mã OTP. Sandbox: 123456 khi SANDBOX_MODE=true.'
+          description: Mã OTP ngẫu nhiên 6 chữ số nhận từ SMS; trong sandbox lấy từ `otpCode` của response request OTP.
     OtpVerifyResponse:
       type: object
       required:

@@ -12,7 +12,7 @@ info:
 
     Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
 servers:
-- url: http://localhost:{port}
+- url: http://localhost:{port}/api/v1
   description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
   variables:
     port:

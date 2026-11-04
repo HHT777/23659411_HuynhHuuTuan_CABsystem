@@ -12,7 +12,7 @@ info:
 
     Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
 servers:
-- url: http://localhost:{port}
+- url: http://localhost:{port}/api/v1
   description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
   variables:
     port:
@@ -296,8 +296,8 @@ paths:
       tags:
       - Booking
       operationId: cancelBooking
-      summary: Hủy Booking đang SEARCHING
-      description: Chỉ hủy được Booking `SEARCHING` (đóng Offer, release reservation, phát `booking.canceled`). Đã có Trip → 409 `TRIP_ALREADY_CREATED` + cancelEndpoint `/trips/{tripId}/cancel`. Accept đang phối hợp → 409 (đợi tripId rồi hủy qua Trip). reason bắt buộc (thiếu → 400).
+      summary: Hủy Booking đang SEARCHING hoặc ASSIGNED
+      description: Hủy Booking `SEARCHING` hoặc `ASSIGNED`; nếu đã có Trip thì đồng bộ Trip sang `CANCELED` và giải phóng tài xế. reason bắt buộc (thiếu → 400).
       x-api-type: public
       x-source: SRS.md §6.8, §8.3 UC-15, §9 FR-22, §10 BRULE-15/16, §16.2, §16.2.1; microservice_design.md §5.5.2, §6.8, §9.6.2
       x-roles:
@@ -336,7 +336,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: 409 — TRIP_ALREADY_CREATED (kèm cancelEndpoint), assignment đang phối hợp, hoặc request cùng key đang xử lý.
+          description: 409 — Booking không ở trạng thái SEARCHING/ASSIGNED hoặc request cùng key đang xử lý.
           content:
             application/json:
               schema:
@@ -600,7 +600,7 @@ components:
           - ASSIGNED
     Booking:
       type: object
-      description: 'GET /bookings/{id}: {bookingId,customerId,status,vehicleType,tariffVersion,cancelable,cancelVia,activeTripId,driverId} (SRS §16.2.1 AUD-14).'
+      description: Booking gồm quãng đường và cước tự động; Payment chỉ được tạo sau khi Trip hoàn tất.
       required:
       - bookingId
       - customerId
@@ -638,6 +638,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        distanceM:
+          type: integer
+          minimum: 1
+        quotedFareVnd:
+          type: integer
+          format: int64
+          description: ceil(distanceM / 100) × 900 VND.
     BookingAssignedPayload:
       type: object
       required:
@@ -757,6 +764,7 @@ components:
       - COMPLETED
       - NO_DRIVER_FOUND
       - CANCELED
+      - EXPIRED
     CancelBookingResponse:
       type: object
       description: 200 CANCELED.
@@ -813,10 +821,12 @@ components:
           $ref: '#/components/schemas/VehicleType'
     CreateBookingResponse:
       type: object
-      description: 201 {bookingId,status:SEARCHING}.
+      description: 201 tạo booking SEARCHING và tính cước; chưa tạo Payment.
       required:
       - bookingId
       - status
+      - distanceM
+      - quotedFareVnd
       properties:
         bookingId:
           type: string
@@ -825,6 +835,13 @@ components:
           type: string
           enum:
           - SEARCHING
+        distanceM:
+          type: integer
+          minimum: 1
+        quotedFareVnd:
+          type: integer
+          format: int64
+          description: ceil(distanceM / 100) × 900 VND.
     DriverSnapshot:
       type: object
       description: Driver snapshot {driverId,fullName,plate,vehicleType,ratingAverage} (SRS §16.2.1). Không chứa CCCD/password.
@@ -954,7 +971,7 @@ components:
       properties:
         estimatedFareVnd:
           type: integer
-          description: Báo giá ước tính (VND) — KHÔNG phải Fare cuối.
+          description: Cước VND = ceil(distanceM / 100) × 900.
           format: int64
         distanceM:
           type: integer

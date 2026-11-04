@@ -1,0 +1,369 @@
+name: cab-system
+
+services:
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: gateway/Dockerfile
+    environment:
+      GATEWAY_PORT: 8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    ports:
+      - "8000:8000"
+    expose:
+      - "8000"
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    networks: [cab-internal]
+    depends_on:
+      identity-service: {condition: service_healthy}
+      customer-service: {condition: service_healthy}
+      driver-service: {condition: service_healthy}
+      booking-service: {condition: service_healthy}
+      trip-service: {condition: service_healthy}
+      payment-service: {condition: service_healthy}
+      notification-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  identity-service: &business-service
+    build: {context: ./backend, dockerfile: services/identity-service/Dockerfile}
+    environment:
+      SERVICE_NAME: identity-service
+      SERVICE_PORT: 3000
+      DEPENDENCIES: postgres:5432,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    expose: ["3000"]
+    volumes:
+      - ./.secrets:/run/secrets:ro
+    networks: [cab-internal]
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  customer-service:
+    <<: *business-service
+    build: {context: ./backend, dockerfile: services/customer-service/Dockerfile}
+    environment:
+      SERVICE_NAME: customer-service
+      SERVICE_PORT: 3001
+      DEPENDENCIES: postgres:5432,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    expose: ["3001"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  driver-service:
+    <<: *business-service
+    build: {context: ./backend, dockerfile: services/driver-service/Dockerfile}
+    environment:
+      SERVICE_NAME: driver-service
+      SERVICE_PORT: 3002
+      DEPENDENCIES: postgres:5432,redis:6379,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+    expose: ["3002"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  booking-service:
+    <<: *business-service
+    build: {context: ./backend, dockerfile: services/booking-service/Dockerfile}
+    environment:
+      SERVICE_NAME: booking-service
+      SERVICE_PORT: 3003
+      DEPENDENCIES: postgres:5432,redis:6379,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+    expose: ["3003"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3003/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  trip-service:
+    <<: *business-service
+    build: {context: ./backend, dockerfile: services/trip-service/Dockerfile}
+    environment:
+      SERVICE_NAME: trip-service
+      SERVICE_PORT: 3004
+      DEPENDENCIES: postgres:5432,redis:6379,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+    expose: ["3004"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3004/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  payment-service:
+    <<: *business-service
+    build: {context: ./backend, dockerfile: services/payment-service/Dockerfile}
+    environment:
+      SERVICE_NAME: payment-service
+      SERVICE_PORT: 3005
+      DEPENDENCIES: postgres:5432,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+    expose: ["3005"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3005/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  notification-service:
+    <<: *business-service
+    build: {context: ./backend, dockerfile: services/notification-service/Dockerfile}
+    environment:
+      SERVICE_NAME: notification-service
+      SERVICE_PORT: 3006
+      DEPENDENCIES: mongodb:27017,kafka:9092
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+      JWT_SECRET: ${JWT_SECRET:-cab-local-jwt-secret-change-me}
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-cab-local-callback-secret}
+      FIELD_ENCRYPTION_KEY_PATH: /run/secrets/field-encryption.key
+      FIELD_ENCRYPTION_ACTIVE_KID: local-v1
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-cab-local-field-key-change-me}
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      STORAGE_MODE: ${STORAGE_MODE:-database}
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      MONGO_URI: mongodb://mongodb:27017/cab_notification_db?replicaSet=rs0
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    depends_on:
+      mongo-init: {condition: service_completed_successfully}
+      kafka-init: {condition: service_completed_successfully}
+    expose: ["3006"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3006/ready', {headers:{'X-Service-Token':process.env.INTERNAL_SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 15
+
+  postgres:
+    image: postgres:16-alpine
+    expose: ["5432"]
+    environment:
+      POSTGRES_USER: cab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: cab_identity_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/infra/postgres/init-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+    networks: [cab-internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cab -d cab_identity_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    profiles: ["admin"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@cab-system.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-change-me}
+      PGADMIN_DISABLE_POSTFIX: "true"
+    depends_on:
+      postgres: {condition: service_healthy}
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./backend/infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks: [cab-internal]
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    expose: ["27017"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes: [mongodb-data:/data/db]
+    networks: [cab-internal]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo-init:
+    image: mongo:7
+    networks: [cab-internal]
+    depends_on:
+      mongodb: {condition: service_healthy}
+    restart: "no"
+    volumes: [./backend/infra/mongodb/init-replica-set.js:/docker-entrypoint-initdb.d/init-replica-set.js:ro]
+    command: ["mongosh", "mongodb://mongodb:27017/admin", "/docker-entrypoint-initdb.d/init-replica-set.js"]
+
+  redis:
+    image: redis:7-alpine
+    networks: [cab-internal]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:4.0.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    networks: [cab-internal]
+    volumes: [kafka-data:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  kafka-init:
+    image: apache/kafka:4.0.0
+    networks: [cab-internal]
+    depends_on:
+      kafka: {condition: service_healthy}
+    restart: "no"
+    volumes: [./backend/infra/kafka/create-topics.sh:/opt/cab/create-topics.sh:ro]
+    command: ["/bin/bash", "/opt/cab/create-topics.sh"]
+
+networks:
+  cab-internal:
+    name: cab-internal
+    driver: bridge
+
+volumes:
+  postgres-data:
+  pgadmin-data:
+  mongodb-data:
+  redis-data:
+  kafka-data:

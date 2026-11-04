@@ -1,0 +1,13 @@
+name: infrastructure-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate P1 Compose
+        run: docker compose --env-file .env.example config --quiet

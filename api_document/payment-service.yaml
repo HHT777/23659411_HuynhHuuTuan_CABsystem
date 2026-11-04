@@ -4,7 +4,7 @@ info:
   title: CAB System — payment-service
   version: 1.0.0
   description: |-
-    API contract của **payment-service** — Billing/Payment (BC07, PostgreSQL cab_payment_db): thanh toán online sau Trip COMPLETED, callback Provider (HMAC), idempotency. Payment.amountVnd = Trip.fare; client không gửi amount.
+    API contract của **payment-service** — thanh toán online sau khi Trip hoàn tất. Booking và Trip không tự tạo Payment; Customer chủ động chọn ONLINE, thực hiện thanh toán và hệ thống nhận callback để chuyển Payment sang COMPLETED và đánh dấu Trip PAID.
 
     Actor: CUSTOMER(owner), ADMIN (đọc), Payment Provider (callback HMAC).
 
@@ -12,7 +12,7 @@ info:
 
     Quy ước chung: JSON camelCase; ID UUID; thời gian UTC; tiền VND (bigint); error envelope `{error:{code,message},requestId}`; `X-Request-Id` xuyên REST/Kafka/log (NFR-02). Rate limit tại Gateway: vượt ngưỡng trả 429 + Retry-After (SEC-07); mặc định RATE_GENERAL 100/phút/userId (public theo IP) áp dụng cho mọi route — 429 chỉ được liệt kê riêng ở endpoint có cấu hình rate riêng. `x-api-type`: public = client gọi qua Gateway; internal = service↔service (/internal/**, Gateway trả 404 cho client); health = liveness/readiness có credential. `x-grpc-rpc` = RPC mà Gateway dùng để chuyển route này tới service (micro §2.6.3).
 servers:
-- url: http://localhost:{port}
+- url: http://localhost:{port}/api/v1
   description: API Gateway (local development) — điểm vào của client/frontend cho public API (SRS §16.2).
   variables:
     port:
@@ -63,7 +63,7 @@ paths:
       - Payment
       operationId: createPayment
       summary: Khởi tạo thanh toán online
-      description: Đọc Trip qua INT-09 (phải COMPLETED + UNPAID, customerId == JWT.profileId); tạo Payment `PENDING` + attempt, gọi Provider adapter lấy paymentUrl. Client gửi amount → 400; sai chủ → 403; PENDING với key khác hoặc đã trả → 409; FAILED retry bằng key mới trên cùng Payment. RATE_PAYMENT 10/phút/userId.
+      description: Tạo Payment PENDING cho Trip COMPLETED thuộc Customer. Số tiền lấy từ Trip; chỉ chấp nhận method ONLINE.
       x-api-type: public
       x-source: SRS.md §6.9.1, §8.3 UC-17, §9 FR-26, §10 BRULE-18/19/21, §16.2, §16.2.1; microservice_design.md §5.7.2, §6.9, §9.6.4
       x-roles:
@@ -119,7 +119,7 @@ paths:
       - Payment
       operationId: getPayment
       summary: Xem Payment
-      description: Customer chủ Payment hoặc ADMIN. Dùng để xác nhận COMPLETED sau callback.
+      description: Customer chủ Payment hoặc ADMIN xem trạng thái PENDING/COMPLETED/FAILED.
       x-api-type: public
       x-source: SRS.md §8.3 UC-17, §9 FR-27, §16.2, §16.2.1; microservice_design.md §5.7.2
       x-roles:
@@ -207,7 +207,7 @@ paths:
       - Payment
       operationId: sandboxConfirm
       summary: 'Sandbox: mô phỏng callback'
-      description: Chỉ khi SANDBOX_MODE=true; chủ Payment gọi, mock gửi callback vào Gateway với chữ ký HMAC hợp lệ (không ghi DB Payment trực tiếp). scenario SUCCESS/FAIL/DUPLICATE_CALLBACK; DUPLICATE_CALLBACK → 200 kết quả cũ, Kafka chỉ 1 `payment.completed` (PC30).
+      description: Mô phỏng provider callback trong sandbox. SUCCESS chuyển Payment thành COMPLETED và đánh dấu Trip PAID; FAILED chuyển Payment thành FAILED.
       x-api-type: public
       x-source: SRS.md §8.3 UC-17, §9 FR-29, §16.2, §17 PC30; microservice_design.md §5.7.2, §10.4
       x-roles:
@@ -424,7 +424,7 @@ components:
           format: date-time
     PaymentCreated:
       type: object
-      description: 201 {paymentId,tripId,status,amountVnd,paymentUrl?} (SRS §16.2.1). Replay POST trả response khởi tạo cũ.
+      description: 201 tạo Payment PENDING cho Trip COMPLETED; replay cùng Idempotency-Key trả kết quả cũ.
       required:
       - paymentId
       - tripId
@@ -442,9 +442,6 @@ components:
         amountVnd:
           type: integer
           format: int64
-        paymentUrl:
-          type: string
-          description: 'Dữ liệu nhạy cảm: che log, mã hóa cache.'
     PaymentFailedPayload:
       type: object
       required:

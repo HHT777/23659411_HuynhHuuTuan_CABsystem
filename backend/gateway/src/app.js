@@ -15,6 +15,8 @@ const services = {
   "notification-service": ["notification-service", 3006],
 };
 
+export const API_PREFIX = "/api/v1";
+
 export const routes = [
   ["/auth", "identity-service"],
   ["/customers", "customer-service"],
@@ -128,12 +130,15 @@ export function createGatewayApp() {
     next();
   });
   app.use(
-    "/payments/callback",
+    `${API_PREFIX}/payments/callback`,
     express.raw({ type: "application/json", limit: "1mb" }),
   );
   app.use(express.json({ limit: "1mb" }));
   app.use((request, response, next) => {
-    const path = request.path.replace(/\/+$/, "") || "/";
+    const requestPath = request.path.startsWith(`${API_PREFIX}/`)
+      ? request.path.slice(API_PREFIX.length)
+      : request.path;
+    const path = requestPath.replace(/\/+$/, "") || "/";
     const claims = verifyJwt(request.get("Authorization"));
     const windowKey = `${claims?.sub ?? request.ip}:${request.method}:${path}`;
     const now = Date.now();
@@ -161,7 +166,7 @@ export function createGatewayApp() {
     }
     return next();
   });
-  app.get("/health", (_request, response) =>
+  app.get(["/health", `${API_PREFIX}/health`], (_request, response) =>
     response.json({ status: "healthy", service: "gateway" }),
   );
   app.get("/", (_request, response) =>
@@ -171,11 +176,12 @@ export function createGatewayApp() {
       health: "/health",
       readiness: "/ready",
       endpointCatalog: "/endpoints",
+      apiBase: API_PREFIX,
     }),
   );
-  app.get("/endpoints", (_request, response) =>
+  app.get(["/endpoints", `${API_PREFIX}/endpoints`], (_request, response) =>
     response.json({
-      baseUrl: "http://localhost:8000",
+      baseUrl: `http://localhost:8000${API_PREFIX}`,
       note: "Use these public paths through the Gateway. Login first for endpoints requiring Authorization.",
       gatewayEndpoints: [
         { method: "GET", path: "/", description: "Gateway metadata" },
@@ -187,17 +193,17 @@ export function createGatewayApp() {
       services: publicEndpointCatalog(),
     }),
   );
-  app.use("/internal", (_request, response) =>
+  app.use(["/internal", `${API_PREFIX}/internal`], (_request, response) =>
     response.status(404).json({ error: "route not found" }),
   );
-  app.get("/health/services", async (_request, response) => {
+  app.get(["/health/services", `${API_PREFIX}/health/services`], async (_request, response) => {
     const checked = await serviceChecks(token);
     const ready = checked.every((service) => service.status === "up");
     response
       .status(ready ? 200 : 503)
       .json({ services: checked, checkedAt: new Date().toISOString() });
   });
-  app.get("/ready", async (_request, response) => {
+  app.get(["/ready", `${API_PREFIX}/ready`], async (_request, response) => {
     const checked = await serviceChecks(token);
     const ready = checked.every((service) => service.status === "up");
     response.status(ready ? 200 : 503).json({
@@ -206,7 +212,7 @@ export function createGatewayApp() {
       services: checked,
     });
   });
-  app.use(async (request, response) => {
+  app.use(API_PREFIX, async (request, response) => {
     const serviceName = targetFor(request.path);
     if (!serviceName)
       return response.status(404).json({ error: "route not found" });
@@ -226,7 +232,7 @@ export function createGatewayApp() {
       if (request.get(name)) headers[name] = request.get(name);
     try {
       const upstream = await fetch(
-        `${endpointFor(serviceName)}${request.originalUrl}`,
+        `${endpointFor(serviceName)}${request.url}`,
         {
           method: request.method,
           headers,

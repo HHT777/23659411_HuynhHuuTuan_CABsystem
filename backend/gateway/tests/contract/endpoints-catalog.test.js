@@ -31,7 +31,7 @@ test("every public endpoint is routed by Gateway to its owner", () => {
       const key = `${endpoint.method} ${endpoint.path}`;
       assert.ok(!seen.has(key), `duplicate public endpoint ${key}`);
       seen.add(key);
-      assert.equal(endpoint.url, `http://localhost:8000${endpoint.path}`);
+      assert.equal(endpoint.url, `http://localhost:8000/api/v1${endpoint.path}`);
     }
   }
   assert.ok(seen.size >= 30);

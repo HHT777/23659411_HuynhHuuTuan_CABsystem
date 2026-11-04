@@ -13,6 +13,9 @@
     "scripts": {
         "check:syntax": "node scripts/check-contracts.js",
         "test:gateway": "node --test gateway/tests/contract/route-rpc.test.js gateway/tests/contract/endpoints-catalog.test.js gateway/tests/integration/payment-raw-body.test.js",
+        "test:fare": "node --test --test-isolation=none tests/fare.test.js",
+        "test:payment": "node --test --test-isolation=none tests/online-payment.test.js",
+        "test:otp": "node --test --test-isolation=none tests/random-otp.test.js",
         "test:postman": "node scripts/run-postman.js"
     },
     "dependencies": {

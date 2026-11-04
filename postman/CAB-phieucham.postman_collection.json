@@ -1,0 +1,1941 @@
+{
+  "info": {
+    "name": "CAB System - phieucham PC6-PC30",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run sequentially on local seeded stack. PC19 creates an ONLINE payment after trip completion and confirms it through the sandbox callback. PC24: inspect DB using document/database-and-postman.md. Wait 60 seconds between runs."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api/v1"
+    }
+  ],
+  "item": [
+    {
+      "name": "PC6 Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/health",
+        "description": "PC6 Health"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"runId\", Date.now().toString());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC6 Health status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Endpoint catalog",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/endpoints",
+        "description": "Endpoint catalog"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"Endpoint catalog status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"7 service catalogs\", () => pm.expect(Object.keys(data.services)).to.have.length(7));",
+              "pm.test(\"driver routes visible\", () => pm.expect(data.services[\"driver-service\"].some(x => x.path === \"/drivers/nearby\")).to.eql(true));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC6 Ready",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/ready",
+        "description": "PC6 Ready"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC6 Ready status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC6 Services",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/health/services",
+        "description": "PC6 Services"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC6 Services status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"7 services\", () => pm.expect(data.services).to.have.length(7));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC8 Internal routes blocked",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/internal/accounts/drivers",
+        "description": "PC8 Internal routes blocked"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC8 Internal routes blocked status\", () => pm.response.to.have.status(404));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC10 Login customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "PC10 Login customer",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"customer@cab.local\",\n  \"password\": \"Customer123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC10 Login customer status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"customerToken\", data.accessToken);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC10 Login driver",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "PC10 Login driver",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"driver@cab.local\",\n  \"password\": \"Driver123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC10 Login driver status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"driverToken\", data.accessToken);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC10 Login admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "PC10 Login admin",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@cab.local\",\n  \"password\": \"Admin123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC10 Login admin status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"adminToken\", data.accessToken);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC9 Register customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-register"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "description": "PC9 Register customer",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"<script>alert('hack')</script>\",\n  \"email\": \"postman-{{runId}}@cab.local\",\n  \"phone\": \"+849{{runId}}\",\n  \"password\": \"Customer123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC9 Register customer status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"customerId\", data.customerId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC10 Login new customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "PC10 Login new customer",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"postman-{{runId}}@cab.local\",\n  \"password\": \"Customer123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC10 Login new customer status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"newCustomerToken\", data.accessToken);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC11/PC26 Customer profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/customers/{{customerId}}",
+        "description": "PC11/PC26 Customer profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC11/PC26 Customer profile status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"XSS escaped\", () => pm.expect(data.fullName).not.to.include(\"<script>\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC12 Driver profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/20000000-0000-4000-8000-000000000001",
+        "description": "PC12 Driver profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC12 Driver profile status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC13 Nearby 3km paging",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/nearby?lat=10.7735&lng=106.699&radius=3000&page=1&limit=2",
+        "description": "PC13 Nearby 3km paging"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC13 Nearby 3km paging status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"radius and limit\", () => { pm.expect(data.items.length).to.be.at.most(2); data.items.forEach(x => pm.expect(x.distanceM).to.be.at.most(3000)); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC14 Booking history paging",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings?page=2&limit=2",
+        "description": "PC14 Booking history paging"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC14 Booking history paging status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"5 seeded bookings and page 2\", () => { pm.expect(data.total).to.be.at.least(5); pm.expect(data.items).to.have.length(2); pm.expect(data.page).to.eql(2); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC15 Create booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-booking"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings",
+        "description": "PC15 Create booking",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pickup\": {\n    \"lat\": 10.7735,\n    \"lng\": 106.699\n  },\n  \"dropoff\": {\n    \"lat\": 10.78,\n    \"lng\": 106.71\n  },\n  \"vehicleType\": \"BIKE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC15 Create booking status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"bookingId\", data.bookingId);",
+              "pm.collectionVariables.set(\"amountVnd\", data.quotedFareVnd);",
+              "pm.test(\"searching with automatic fare\", () => { pm.expect(data.status).to.eql(\"SEARCHING\"); pm.expect(data).not.to.have.property(\"paymentId\"); pm.expect(data.quotedFareVnd).to.eql(Math.ceil(data.distanceM / 100) * 900); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC30 Replay booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-booking"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings",
+        "description": "PC30 Replay booking",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pickup\": {\n    \"lat\": 10.7735,\n    \"lng\": 106.699\n  },\n  \"dropoff\": {\n    \"lat\": 10.78,\n    \"lng\": 106.71\n  },\n  \"vehicleType\": \"BIKE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC30 Replay booking status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.test(\"same booking\", () => pm.expect(data.bookingId).to.eql(pm.collectionVariables.get(\"bookingId\")));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC16 Driver offers",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/offers",
+        "description": "PC16 Driver offers"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC16 Driver offers status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"offerId\", data.items.find(x => x.bookingId === pm.collectionVariables.get(\"bookingId\")).id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC16 Offer detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/offers/{{offerId}}",
+        "description": "PC16 Offer detail"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC16 Offer detail status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC16 Accept offer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-accept"
+          }
+        ],
+        "url": "{{baseUrl}}/offers/{{offerId}}/accept",
+        "description": "PC16 Accept offer",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC16 Accept offer status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"tripId\", data.tripId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC16 Customer notification",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/notifications",
+        "description": "PC16 Customer notification"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC16 Customer notification status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"assigned notification\", () => pm.expect(data.items.some(x => x.type === \"DRIVER_ASSIGNED\")).to.eql(true));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC17 Reject skipped transition",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}/status",
+        "description": "PC17 Reject skipped transition",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"COMPLETED\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC17 Reject skipped transition status\", () => pm.response.to.have.status(409));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC17 ARRIVED",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}/status",
+        "description": "PC17 ARRIVED",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"ARRIVED\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC17 ARRIVED status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC17 IN_PROGRESS",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}/status",
+        "description": "PC17 IN_PROGRESS",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC17 IN_PROGRESS status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC17 Trip location",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}/location",
+        "description": "PC17 Trip location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 10.777,\n  \"lng\": 106.705\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC17 Trip location status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC17 COMPLETED",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}/status",
+        "description": "PC17 COMPLETED",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"COMPLETED\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC17 COMPLETED status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC19 Choose online payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-payment"
+          }
+        ],
+        "url": "{{baseUrl}}/payments",
+        "description": "PC19 Choose online payment",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tripId\": \"{{tripId}}\",\n  \"method\": \"ONLINE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC19 Choose online payment status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"paymentId\", data.paymentId);",
+              "pm.test(\"payment pending\", () => { pm.expect(data.status).to.eql(\"PENDING\"); pm.expect(data.amountVnd).to.eql(Number(pm.collectionVariables.get(\"amountVnd\"))); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC19 Perform sandbox payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-payment-confirm"
+          }
+        ],
+        "url": "{{baseUrl}}/payments/{{paymentId}}/sandbox-confirm",
+        "description": "PC19 Perform sandbox payment",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scenario\": \"SUCCESS\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC19 Perform sandbox payment status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"provider callback completed payment\", () => pm.expect(data.result).to.eql(\"COMPLETED\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC19 Check payment result",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/payments/{{paymentId}}",
+        "description": "PC19 Check payment result"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC19 Check payment result status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"payment completed\", () => pm.expect(data.status).to.eql(\"COMPLETED\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC19 Trip paid",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}",
+        "description": "PC19 Trip paid"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC19 Trip paid status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"paid\", () => pm.expect(data.paymentStatus).to.eql(\"PAID\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC20/PC26 Review",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-review"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{tripId}}/reviews",
+        "description": "PC20/PC26 Review",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stars\": 5,\n  \"comment\": \"<script>alert('hack')</script>\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC20/PC26 Review status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.test(\"review linked and escaped\", () => { pm.expect(data.tripId).to.eql(pm.collectionVariables.get(\"tripId\")); pm.expect(data.comment).not.to.include(\"<script>\"); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC18 New booking for cancellation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-cancel-booking"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings",
+        "description": "PC18 New booking for cancellation",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pickup\": {\n    \"lat\": 10.7735,\n    \"lng\": 106.699\n  },\n  \"dropoff\": {\n    \"lat\": 10.78,\n    \"lng\": 106.71\n  },\n  \"vehicleType\": \"BIKE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC18 New booking for cancellation status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"cancelBookingId\", data.bookingId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC18 Find cancellation offer",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/offers",
+        "description": "PC18 Find cancellation offer"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC18 Find cancellation offer status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"cancelOfferId\", data.items.find(x => x.bookingId === pm.collectionVariables.get(\"cancelBookingId\")).id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC18 Assign cancellation trip",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-cancel-accept"
+          }
+        ],
+        "url": "{{baseUrl}}/offers/{{cancelOfferId}}/accept",
+        "description": "PC18 Assign cancellation trip",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC18 Assign cancellation trip status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"cancelTripId\", data.tripId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC18 Driver cancels unpaid trip",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/trips/{{cancelTripId}}/cancel",
+        "description": "PC18 Driver cancels unpaid trip",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"Tài xế không thể tiếp tục\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC18 Driver cancels unpaid trip status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"canceled without automatic payment\", () => { pm.expect(data.status).to.eql(\"CANCELED\"); pm.expect(data.canceledBy).to.eql(\"DRIVER\"); pm.expect(data.paymentStatus).to.eql(\"UNPAID\"); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC18 Cancellation notification",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/notifications",
+        "description": "PC18 Cancellation notification"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC18 Cancellation notification status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test(\"driver notified\", () => pm.expect(data.items.some(x => x.type === \"TRIP_CANCELED\" && x.resourceId === pm.collectionVariables.get(\"cancelTripId\"))).to.eql(true));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC21 Request random OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/otp/request",
+        "description": "PC21 Request random OTP",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"+848{{runId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC21 Request random OTP status\", () => pm.response.to.have.status(202));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"challengeId\", data.challengeId);",
+              "pm.collectionVariables.set(\"otpCode\", data.otpCode);",
+              "pm.test(\"sandbox returns random six-digit OTP\", () => pm.expect(data.otpCode).to.match(/^\\d{6}$/));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC21 Verify random OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/otp/verify",
+        "description": "PC21 Verify random OTP",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"+848{{runId}}\",\n  \"challengeId\": \"{{challengeId}}\",\n  \"code\": \"{{otpCode}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC21 Verify random OTP status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"registrationToken\", data.registrationToken);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC21 Register driver",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{registrationToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-driver-register"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/register",
+        "description": "PC21 Register driver",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Postman Driver\",\n  \"email\": \"driver-{{runId}}@cab.local\",\n  \"password\": \"Driver123!\",\n  \"vehicleType\": \"BIKE\",\n  \"plate\": \"59A-12345\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC21 Register driver status\", () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"driverId\", data.driverId);",
+              "pm.test(\"pending approval\", () => pm.expect(data.status).to.eql(\"PENDING_APPROVAL\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC22 Pending applications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/admin/drivers?status=PENDING_APPROVAL",
+        "description": "PC22 Pending applications"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC22 Pending applications status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC22 Application detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/admin/drivers/{{driverId}}",
+        "description": "PC22 Application detail"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC22 Application detail status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC22 Approve driver",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/admin/drivers/{{driverId}}/approve",
+        "description": "PC22 Approve driver",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC22 Approve driver status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC22 Approved driver login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "PC22 Approved driver login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"driver-{{runId}}@cab.local\",\n  \"password\": \"Driver123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC22 Approved driver login status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set(\"newDriverToken\", data.accessToken);",
+              "pm.test(\"account active\", () => pm.expect(data.accountStatus).to.eql(\"ACTIVE\"));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC23 Driver ONLINE",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newDriverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/me/availability",
+        "description": "PC23 Driver ONLINE",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"ONLINE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC23 Driver ONLINE status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC23 Driver OFFLINE",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newDriverToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/me/availability",
+        "description": "PC23 Driver OFFLINE",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"OFFLINE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC23 Driver OFFLINE status\", () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC25 SQL injection",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "PC25 SQL injection",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"' OR 1=1 --\",\n  \"password\": \"anything\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC25 SQL injection status\", () => pm.response.to.have.status(401));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC27 Tampered JWT",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tamperedToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/customers/{{customerId}}",
+        "description": "PC27 Tampered JWT"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = pm.collectionVariables.get(\"newCustomerToken\"); pm.collectionVariables.set(\"tamperedToken\", token.slice(0, -8) + \"xxxxxxxx\");"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC27 Tampered JWT status\", () => pm.response.to.have.status(401));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC28 Customer cannot use driver API",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/drivers/me/availability",
+        "description": "PC28 Customer cannot use driver API",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"ONLINE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC28 Customer cannot use driver API status\", () => pm.response.to.have.status(403));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC29 Booking request 5",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-rate-5"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings",
+        "description": "PC29 Booking request 5",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC29 Booking request 5 status\", () => pm.response.to.have.status(400));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC29 Booking request 6",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{runId}}-rate-6"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings",
+        "description": "PC29 Booking request 6",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC29 Booking request 6 status\", () => pm.response.to.have.status(400));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PC29 Rate limited",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{newCustomerToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/bookings",
+        "description": "PC29 Rate limited",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "{",
+              "pm.test(\"PC29 Rate limited status\", () => pm.response.to.have.status(429));",
+              "const data = pm.response.json();",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

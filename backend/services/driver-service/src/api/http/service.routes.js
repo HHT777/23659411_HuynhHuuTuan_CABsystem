@@ -39,6 +39,48 @@ export function registerRoutes(app, context) {
         ? response.json({ ...driverView(driver), citizenId: driver.citizenId ? "***masked***" : null, licenseNumber: driver.licenseNumber ? "***masked***" : null })
         : error(response, 404, "NOT_FOUND", "driver not found");
     });
+    app.patch("/drivers/me", (request, response) => {
+      const user = requireUser(request, response, ["DRIVER"]);
+      if (!user) return;
+      const driver = state.drivers.get(user.profileId);
+      if (!driver) return error(response, 404, "NOT_FOUND", "driver not found");
+
+      if (!request.body || typeof request.body !== "object" || Array.isArray(request.body))
+        return error(response, 400, "INVALID_ARGUMENT", "request body must be an object");
+      const allowedFields = new Set([
+        "fullName",
+        "vehicleType",
+        "plate",
+        "citizenId",
+        "licenseNumber",
+      ]);
+      const fields = Object.keys(request.body ?? {});
+      if (!fields.length || fields.some((field) => !allowedFields.has(field)))
+        return error(response, 400, "INVALID_ARGUMENT", "only profile fields can be updated");
+      if ("fullName" in request.body &&
+        (typeof request.body.fullName !== "string" || !request.body.fullName.trim()))
+        return error(response, 400, "INVALID_ARGUMENT", "fullName must be a non-empty string");
+      if ("vehicleType" in request.body &&
+        !["BIKE", "SEDAN", "SUV"].includes(request.body.vehicleType))
+        return error(response, 400, "INVALID_ARGUMENT", "vehicleType must be BIKE, SEDAN or SUV");
+      for (const field of ["plate", "citizenId", "licenseNumber"]) {
+        if (field in request.body &&
+          (typeof request.body[field] !== "string" || !request.body[field].trim()))
+          return error(response, 400, "INVALID_ARGUMENT", `${field} must be a non-empty string`);
+      }
+
+      if ("fullName" in request.body) driver.fullName = escapeHtml(request.body.fullName.trim());
+      if ("vehicleType" in request.body) driver.vehicleType = request.body.vehicleType;
+      if ("plate" in request.body) driver.plate = request.body.plate.trim();
+      if ("citizenId" in request.body) driver.citizenId = encryptField(request.body.citizenId.trim());
+      if ("licenseNumber" in request.body) driver.licenseNumber = encryptField(request.body.licenseNumber.trim());
+
+      return response.json({
+        ...driverView(driver),
+        citizenId: driver.citizenId ? "***masked***" : null,
+        licenseNumber: driver.licenseNumber ? "***masked***" : null,
+      });
+    });
     app.get("/drivers/:id", (request, response, next) => {
       if (request.params.id === "nearby") return next();
       const user = requireUser(request, response, [

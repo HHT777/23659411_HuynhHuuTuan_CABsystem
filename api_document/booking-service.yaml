@@ -129,10 +129,12 @@ paths:
             schema:
               $ref: '#/components/schemas/FareEstimateRequest'
             example:
-              pickup:
+              pick:
+                add: GV
                 lat: 10.7725
                 lng: 106.698
-              dropoff:
+              des:
+                add: IUH
                 lat: 10.78
                 lng: 106.71
               vehicleType: BIKE
@@ -804,18 +806,21 @@ components:
           description: Kinh độ; số hữu hạn (không chuỗi/NaN).
         address:
           type: string
-          description: Địa chỉ (tùy chọn). Free-text được escape tại output (SEC-04).
+          description: Địa chỉ dạng cũ (tùy chọn). Free-text được escape tại output (SEC-04).
+        add:
+          type: string
+          description: Địa chỉ dạng rút gọn dùng trong pick/des (tùy chọn).
     CreateBookingRequest:
       type: object
-      description: Body POST /bookings (pickup,dropoff,vehicleType).
+      description: Body POST /bookings (pick,des,vehicleType).
       required:
-      - pickup
-      - dropoff
+      - pick
+      - des
       - vehicleType
       properties:
-        pickup:
+        pick:
           $ref: '#/components/schemas/Coordinate'
-        dropoff:
+        des:
           $ref: '#/components/schemas/Coordinate'
         vehicleType:
           $ref: '#/components/schemas/VehicleType'

@@ -225,7 +225,7 @@ Idempotency-Key: pc15-01
 ```
 
 ```json
-{"pickup":{"address":"Go Vap","lat":10.776,"lng":106.701},"destination":{"address":"IUH","lat":10.797,"lng":106.721},"vehicleType":"BIKE"}
+{"pick":{"add":"Go Vap","lat":10.776,"lng":106.701},"des":{"add":"IUH","lat":10.797,"lng":106.721},"vehicleType":"BIKE"}
 ```
 
 Đạt: `201`, `SEARCHING`, có `distanceM`, `quotedFareVnd`; cước bằng `ceil(distanceM/100) × 900`. Copy `bookingId`.
@@ -402,7 +402,7 @@ Idempotency-Key: prep-xss-booking-01
 ```
 
 ```json
-{"pickup":{"address":"Go Vap","lat":10.776,"lng":106.701},"destination":{"address":"IUH","lat":10.797,"lng":106.721},"vehicleType":"BIKE"}
+{"pick":{"add":"Go Vap","lat":10.776,"lng":106.701},"des":{"add":"IUH","lat":10.797,"lng":106.721},"vehicleType":"BIKE"}
 ```
 
 Copy `bookingId`.

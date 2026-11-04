@@ -36,6 +36,7 @@ Quy ước header:
 | --- | --- | --- | --- |
 | GET | `/drivers` | Admin | Lấy toàn bộ tài xế |
 | GET | `/drivers/me` | Driver | Xem hồ sơ bản thân |
+| PATCH | `/drivers/me` | Driver | Cập nhật hồ sơ bản thân |
 | GET | `/drivers/:id` | Customer/Driver sở hữu/Admin | Xem hồ sơ tài xế |
 | GET | `/drivers/nearby` | Customer/Admin | Tìm tài xế theo tọa độ, bán kính, phân trang |
 | POST | `/drivers/otp/request` | Public | Yêu cầu OTP |

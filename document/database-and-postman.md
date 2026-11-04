@@ -10,6 +10,14 @@ docker compose up -d --build
 docker compose ps -a
 ```
 
+Để xem topic, consumer group và message Kafka bằng giao diện web, bật profile quản trị:
+
+```powershell
+docker compose --profile admin up -d kafka-ui
+```
+
+Mở [http://localhost:8080](http://localhost:8080). Kafka UI dùng broker nội bộ `kafka:9092`; có thể đổi cổng host bằng `KAFKA_UI_PORT` trong `.env`.
+
 Script tạo khóa JWT và khóa mã hóa giấy tờ nếu chưa có, giữ nguyên khóa đã tồn tại. `.secrets/` và `.env` được Git ignore. Không thay khóa mã hóa khi vẫn cần đọc dữ liệu cũ; sao lưu khóa cùng với backup database, giữ riêng khỏi database.
 
 `STORAGE_MODE=database` là cấu hình mặc định của Compose. Sáu service nghiệp vụ lưu trong PostgreSQL; notification-service lưu trong MongoDB. Các bảng được tạo bằng `CREATE TABLE IF NOT EXISTS` khi service khởi động, tương thích volume hiện có. Không cần xóa volume. `STORAGE_MODE=memory` chỉ dùng kiểm thử tạm, mất dữ liệu sau restart.

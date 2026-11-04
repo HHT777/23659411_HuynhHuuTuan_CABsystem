@@ -4,6 +4,7 @@ export const serviceEndpoints = [
   { method: "GET", path: "/endpoints", access: "metadata", description: "Danh mục endpoint của service" },
   { method: "GET", path: "/drivers", access: "public", roles: ["ADMIN"], description: "Lấy toàn bộ tài xế" },
   { method: "GET", path: "/drivers/me", access: "public", roles: ["DRIVER"], description: "Lấy hồ sơ tài xế hiện tại" },
+  { method: "PATCH", path: "/drivers/me", access: "public", roles: ["DRIVER"], description: "Cập nhật hồ sơ tài xế hiện tại" },
   { method: "GET", path: "/drivers/:id", access: "public", roles: ["CUSTOMER", "DRIVER(owner)", "ADMIN"], description: "Lấy hồ sơ tài xế" },
   { method: "GET", path: "/drivers/nearby", access: "public", roles: ["CUSTOMER", "ADMIN"], description: "Tìm tài xế online theo tọa độ, bán kính và phân trang" },
   { method: "POST", path: "/drivers/otp/request", access: "public", roles: ["PUBLIC"], description: "Yêu cầu OTP đăng ký tài xế" },

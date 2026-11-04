@@ -8,7 +8,10 @@ Business workflows cover the Postman criteria in `phieucham.md`, with PostgreSQL
 node backend/scripts/setup-local-secrets.js
 docker compose --env-file .env config --quiet
 docker compose --env-file .env up -d --build
+docker compose --env-file .env --profile admin up -d kafka-ui pgadmin
 docker compose ps
 ```
 
 Gateway health endpoints are `GET http://localhost:8000/health`, `/ready`, and `/health/services`. Service requests require `X-Service-Token`; `/internal/*` is blocked at Gateway. Import `postman/CAB-phieucham.postman_collection.json`, or run `node backend/scripts/run-postman.js` after installing backend dependencies.
+
+Kafka UI chạy ở `http://localhost:8080` sau khi bật profile `admin` bằng lệnh trên. UI kết nối tới broker Docker qua `kafka:9092`; đổi cổng host bằng `KAFKA_UI_PORT` trong `.env`.

@@ -1,5 +1,13 @@
 export function registerRoutes(app, context) {
   const { state, INTERNAL_TOKEN, crypto, hashPassword, passwordMatches, internalCall, notify, validPoint, encryptField, escapeHtml, tokenFor, parseToken, error, requireUser, requireInternal, idempotent, saveIdempotency, distanceM, calculateFareVnd } = context;
+    const bookingPoints = (body) => ({
+      pickup: body.pick
+        ? { ...body.pick, ...(body.pick.add !== undefined ? { address: body.pick.add } : {}) }
+        : body.pickup,
+      destination: body.des
+        ? { ...body.des, ...(body.des.add !== undefined ? { address: body.des.add } : {}) }
+        : body.destination ?? body.dropoff,
+    });
     const expireSearchingBookings = async () => {
       const now = Date.now();
       for (const booking of state.bookings.values()) {
@@ -53,14 +61,14 @@ export function registerRoutes(app, context) {
       const user = requireUser(request, response, ["CUSTOMER"]);
       if (!user || !idempotent(request, response, "booking")) return;
       await expireSearchingBookings();
-      const { pickup, vehicleType } = request.body;
-      const destination = request.body.destination ?? request.body.dropoff;
+      const { pickup, destination } = bookingPoints(request.body);
+      const { vehicleType } = request.body;
       if (!pickup || !destination || !["BIKE", "SEDAN", "SUV"].includes(vehicleType))
         return error(
           response,
           400,
           "INVALID_ARGUMENT",
-          "pickup, destination and vehicleType are required",
+          "pick, des and vehicleType are required",
         );
       if (
         [...state.bookings.values()].some(

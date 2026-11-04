@@ -4,6 +4,7 @@ import net from "node:net";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { signJwt, verifyJwt } from "./jwt.js";
+import { publishNotificationEvent } from "./kafka.js";
 
 const state = {
   users: new Map(),
@@ -42,7 +43,13 @@ async function internalCall(service, path, body) {
   return response.json();
 }
 async function notify(recipientId, type, resourceId) {
-  return internalCall("notification", "/internal/notifications", { recipientId, type, resourceId });
+  const event = { recipientId, type, resourceId };
+  try {
+    await publishNotificationEvent(event);
+  } catch (error) {
+    console.error(`Kafka notification publish failed for ${type}:`, error.message);
+  }
+  return internalCall("notification", "/internal/notifications", event);
 }
 function replayKey(request, prefix) {
   return `${prefix}:${request.user?.sub ?? parseToken(request.get("Authorization"))?.sub ?? "anonymous"}:${request.path}:${request.get("Idempotency-Key")}`;
@@ -384,7 +391,7 @@ export function createService({ endpoints = [], registerRoutes } = {}) {
     }
     for (const name of ["page", "limit", "radius"]) if (req.query[name] !== undefined && (!Number.isInteger(Number(req.query[name])) || Number(req.query[name]) <= 0)) return error(res, 400, "INVALID_ARGUMENT", `invalid ${name}`);
     if (req.path.includes("nearby") && !validPoint(req.query)) return error(res, 400, "INVALID_ARGUMENT", "invalid coordinates");
-    for (const point of [req.body?.pickup, req.body?.destination, req.body?.dropoff]) if (point && !validPoint(point)) return error(res, 400, "INVALID_ARGUMENT", "invalid coordinates");
+    for (const point of [req.body?.pickup, req.body?.destination, req.body?.dropoff, req.body?.pick, req.body?.des]) if (point && !validPoint(point)) return error(res, 400, "INVALID_ARGUMENT", "invalid coordinates");
     next();
   });
   if (store) app.use(store.middleware);
